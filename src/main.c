@@ -32,9 +32,10 @@ int main(void) {
     Ctx ctx = { 0 };
     init_ctx(&ctx);
 
-    const int init_win_w = 300;
-    const int init_win_h = 300;
+    const int init_win_w = 500;
+    const int init_win_h = 500;
 
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(init_win_w, init_win_h, "woyspritemeta");
     hook_glfw_callbacks(&ctx);
 

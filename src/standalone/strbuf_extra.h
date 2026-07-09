@@ -3,6 +3,8 @@
 
 #include "strbuf.h"
 
+#define PRIstrargbuf(buf) PRIstrarg(strbuf_view2(buf))
+
 static inline int _strbuf_int_min(int a, int b) { return a < b ? a : b; }
 static strview_t strbuf_view2(strbuf_t* buf) // TODO: Delete this or justify it.
 {

@@ -2,6 +2,7 @@
 #define STATE_H
 
 #include "strbuf.h"
+#include "raylib.h"
 
 typedef struct Ctx Ctx;
 
@@ -14,10 +15,18 @@ typedef struct strbuf_wrap {
     strbuf_t *str;
 } strbuf_wrap;
 
+typedef struct Spritesheet {
+    strbuf_t *path;
+    Texture texture;
+} Spritesheet;
+
 #define DYNA__TYPE Action
 #include "da.h"
 
 #define DYNA__TYPE strbuf_wrap
+#include "da.h"
+
+#define DYNA__TYPE Spritesheet
 #include "da.h"
 
 typedef struct Draw {
@@ -27,8 +36,12 @@ typedef struct Draw {
 
 typedef struct Ctx {
     Draw draw; // Draw context.
+
+    bool has_project_file_open;
+    strbuf_t *curr_project_file_path;
+
     Action_Dyna actions;
-    strbuf_wrap_Dyna spritesheet_paths;
+    Spritesheet_Dyna spritesheet_list;
 } Ctx;
 
 #endif // !STATE_H

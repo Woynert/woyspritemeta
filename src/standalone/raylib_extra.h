@@ -5,6 +5,7 @@
 #include "strview.h"
 #include "stdio.h"
 #include "strbuf_extra.h"
+#include "la.h"
 
 
 typedef union Rect2 {
@@ -20,6 +21,25 @@ typedef union Rect2 {
     };
     Rectangle rect;
 } Rect2;
+
+typedef union Rect2i {
+    struct {
+        int x;
+        int y;
+        int width;
+        int height;
+    };
+    struct {
+        V2i pos;
+        V2i size;
+    };
+} Rect2i;
+
+Rect2 Rect2i_to_Rect2(Rect2i r)
+{ return (Rect2) {{ (float)r.x, (float)r.y, (float)r.width, (float)r.height }}; }
+
+Rect2i Rect2_to_Rect2i(Rect2 r)
+{ return (Rect2i) {{ (int)r.x, (int)r.y, (int)r.width, (int)r.height }}; }
 
 /* For drawing vertically invertex textures (i.e. BeginTextureMode) */
 void DrawTextureRec_flipped (Texture2D texture, Rectangle source, Vector2 position, Color tint) {
@@ -134,6 +154,21 @@ void DrawTextEx_strview(
         }
         i += codepointByteCount;   // Move text bytes counter to next codepoint
     }
+}
+
+bool CheckCollisionPointReci(V2i point, Rect2i rec) {
+    return ((point.x >= rec.x) && (point.x < (rec.x + rec.width)) && (point.y >= rec.y) && (point.y < (rec.y + rec.height)));
+}
+
+void DrawRectangleReci(Rect2i rect, Color color) {
+    DrawRectanglePro(
+        (Rectangle){ (float)rect.x, (float)rect.y, (float)rect.width, (float)rect.height },
+        (Vector2){ 0.0f, 0.0f }, 0.0f, color);
+}
+
+V2i GetMousePositioni(void) {
+    Vector2 mouse = GetMousePosition();
+    return (V2i) {{ (int)mouse.x, (int)mouse.y }};
 }
 
 #endif // !RAYLIB_EXTRA

@@ -5,6 +5,8 @@
 #include "tinyfiledialogs.h"
 #include "portable_utils.h"
 #include "strbuf_extra.h"
+#include "cwalk.h"
+#include "raylib.h"
 
 int create_new_project(Ctx *ctx);
 
@@ -12,7 +14,8 @@ void _setup_ctx(Ctx *ctx);
 
 int init_ctx(Ctx *ctx) {
     ctx->actions = Action_Dyna_create();
-    ctx->spritesheet_paths = strbuf_wrap_Dyna_create();
+    ctx->spritesheet_list = Spritesheet_Dyna_create();
+    ctx->curr_project_file_path = strbuf_create_empty(0, NULL);
 
     _setup_ctx(ctx);
     return 0;
@@ -20,16 +23,80 @@ int init_ctx(Ctx *ctx) {
 
 void free_ctx(Ctx *ctx) {
     Action_Dyna_free(&ctx->actions);
-    strbuf_wrap_Dyna_free(&ctx->spritesheet_paths);
+    Spritesheet_Dyna_free(&ctx->spritesheet_list);
+    strbuf_destroy(&ctx->curr_project_file_path);
 }
 
 int create_new_project(Ctx *ctx) {
     const char *file_patterns[] = { "*.wsp" };
     const char *path_result = tinyfd_saveFileDialog(
-        "Save new project", NULL, 1, file_patterns, "woyspritemeta Project");
-    printfd("Result is %s", path_result);
+        "Save new project", NULL, 1, file_patterns, ".wsp");
     if (path_result == NULL) { return 0; }
+
+    // TODO: Make sure new project file ends in .wsp
+
+    ctx->has_project_file_open = true;
+    strbuf_assign(&ctx->curr_project_file_path, cstr(path_result));
+    printfd("New project file is %s", path_result);
+
     return 0;
+}
+
+void _add_spritesheet(Ctx *ctx, strview_t path, Texture texture) {
+    Spritesheet s = { .path = strbuf_create(path, NULL), .texture = texture };
+    Spritesheet_Dyna_append(&ctx->spritesheet_list, s);
+}
+
+void _clear_spritesheet_list(Ctx *ctx) {
+    for (int i = 0; i < ctx->spritesheet_list.size; ++i) {
+        Spritesheet *s = &ctx->spritesheet_list.items[i];
+        strbuf_destroy(&s->path);
+        if (IsTextureValid(s->texture)) {
+            UnloadTexture(s->texture);
+        }
+    }
+    Spritesheet_Dyna_clear_freeing(&ctx->spritesheet_list);
+}
+
+
+int open_image_as_spritesheet(Ctx *ctx) {
+    const char *file_patterns[] = { "*.png" };
+    const char *path_result = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
+    if (path_result == NULL) { return 0; }
+
+    _clear_spritesheet_list(ctx);
+
+    strbuf_t *spritesheet = strbuf_create(cstr(path_result), NULL);
+
+    // Check if file is valid.
+
+    Texture texture = LoadTexture(spritesheet->cstr);
+    if (!IsTextureValid(texture)) {
+        goto exit;
+    };
+
+    printfd("Sucessfully loaded texture %"PRIstr".", PRIstrargbuf(spritesheet));
+
+    // Add to list.
+
+    _add_spritesheet(ctx, strbuf_view2(spritesheet), texture);
+
+    //if (cwk_path_has_extension(spritesheet->cstr)) {
+
+    /* If basename ends in 1 or 0 will automatically scan for files with similar
+       naming. Example: sheet1.png will scans for sheet2.png sheet3.png sheet4.png */
+
+        // TODO: Try and scan for other 
+    //}
+
+    return 0;
+
+    exit:
+    {
+        strbuf_destroy(&spritesheet);
+
+        return -1;
+    }
 }
 
 int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
@@ -50,7 +117,7 @@ void _setup_ctx(Ctx *ctx) {
     strbuf_assign(&action.name, cstr_SL("Save Project"));
     Action_Dyna_append(&ctx->actions, action);
 
-    action = (Action) { strbuf_create(0, NULL), no_op };
+    action = (Action) { strbuf_create(0, NULL), open_image_as_spritesheet };
     strbuf_assign(&action.name, cstr_SL("Load image as spritesheet"));
     Action_Dyna_append(&ctx->actions, action);
 
