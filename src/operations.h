@@ -8,9 +8,22 @@
 #include "cwalk.h"
 #include "raylib.h"
 
-int create_new_project(Ctx *ctx);
 
 void _setup_ctx(Ctx *ctx);
+int init_ctx(Ctx *ctx);
+void free_ctx(Ctx *ctx);
+int create_new_project(Ctx *ctx);
+void _add_spritesheet(Ctx *ctx, strview_t path, Texture texture);
+void _clear_spritesheet_list(Ctx *ctx);
+int open_image_as_spritesheet(Ctx *ctx);
+void call_action(Ctx *ctx, Action *action);
+Font load_font_with_buncha_codepoints(const char* font_path, int font_size);
+void _setup_ctx(Ctx *ctx);
+void ctx_load_assets(Ctx *ctx);
+int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
+
+
+
 
 int init_ctx(Ctx *ctx) {
     ctx->actions = Action_Dyna_create();
@@ -22,9 +35,18 @@ int init_ctx(Ctx *ctx) {
 }
 
 void free_ctx(Ctx *ctx) {
-    Action_Dyna_free(&ctx->actions);
+
+    _clear_spritesheet_list(ctx);
     Spritesheet_Dyna_free(&ctx->spritesheet_list);
+
+    for (int i = 0; i < ctx->actions.size; ++i) {
+        strbuf_destroy(&ctx->actions.items[i].name);
+    }
+    Action_Dyna_free(&ctx->actions);
+
     strbuf_destroy(&ctx->curr_project_file_path);
+
+    UnloadFont(ctx->draw.font);
 }
 
 int create_new_project(Ctx *ctx) {
@@ -61,25 +83,26 @@ void _clear_spritesheet_list(Ctx *ctx) {
 
 int open_image_as_spritesheet(Ctx *ctx) {
     const char *file_patterns[] = { "*.png" };
-    const char *path_result = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
-    if (path_result == NULL) { return 0; }
+    const char *path_result_cstr = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
+    if (path_result_cstr == NULL) { return 0; }
+    strview_t path_result = cstr(path_result_cstr);
 
     //_clear_spritesheet_list(ctx);
 
-    strbuf_t *spritesheet = strbuf_create(cstr(path_result), NULL);
+    //strbuf_t *spritesheet = strbuf_create(cstr(path_result), NULL);
 
     // Check if file is valid.
 
-    Texture texture = LoadTexture(spritesheet->cstr);
+    Texture texture = LoadTexture(path_result_cstr);
     if (!IsTextureValid(texture)) {
-        goto exit;
+        return -1;
     };
 
-    printfd("Sucessfully loaded texture %"PRIstr".", PRIstrargbuf(spritesheet));
+    printfd("Sucessfully loaded texture %s.", path_result_cstr);
 
     // Add to list.
 
-    _add_spritesheet(ctx, strbuf_view2(spritesheet), texture);
+    _add_spritesheet(ctx, path_result, texture);
 
     //if (cwk_path_has_extension(spritesheet->cstr)) {
 
@@ -90,16 +113,7 @@ int open_image_as_spritesheet(Ctx *ctx) {
     //}
 
     return 0;
-
-    exit:
-    {
-        strbuf_destroy(&spritesheet);
-
-        return -1;
-    }
 }
-
-int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
 
 void call_action(Ctx *ctx, Action *action) {
     printfd("[%"PRIstr"]", PRIstrarg(strbuf_view2(action->name)));

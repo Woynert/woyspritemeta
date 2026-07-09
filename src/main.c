@@ -60,9 +60,9 @@ int main(void) {
         BetterMouse_consume_all();
         EndDrawing();
     }
-    CloseWindow();
 
     free_ctx(&ctx);
+    CloseWindow();
 
     return 0;
 }
