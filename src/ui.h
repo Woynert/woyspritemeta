@@ -58,6 +58,9 @@ void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
 	Rect2i thumbnail_area;
 	V2i text_offset;
 
+	bool show_preview = false;
+	Texture preview_texture = { 0 };
+
 	DrawRectangleReci(area, LIGHTGRAY);
 	ui_draw_text(ctx, cstr_SL("Spritesheets:"), area.pos, BLACK);
 	area.y += ctx->draw.line_height;
@@ -75,15 +78,24 @@ void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
 		if (CheckCollisionPointReci(GetMousePositioni(), item_area)) {
 			DrawRectangleReci(item_area, BLUE);
 
-			//if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
-				//call_action(ctx, action);
-			//}
+			if (BetterMouse_is_held(MOUSE_BUTTON_LEFT)) {
+				show_preview = true;
+				preview_texture = sheet->texture;
+			}
 		}
 
 		ui_draw_text(ctx, strbuf_view2(sheet->path), text_offset, BLACK);
 
 		DrawRectangleReci(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
+		DrawRectangleReci(thumbnail_area, LIGHTGRAY);
 		DrawTextureWithSize(sheet->texture, thumbnail_area);
+	}
+
+	if (show_preview) {
+		Rect2i preview_area = { .pos = GetMousePositioni(), .size = {{ preview_texture.width, preview_texture.height }} };
+		DrawRectangleReci(Rect2i_add_padding_all(preview_area, -1), BLACK);
+		DrawRectangleReci(preview_area, LIGHTGRAY);
+		DrawTextureWithSize(preview_texture, preview_area);
 	}
 }
 
