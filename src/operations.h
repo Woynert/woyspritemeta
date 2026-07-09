@@ -64,7 +64,7 @@ int open_image_as_spritesheet(Ctx *ctx) {
     const char *path_result = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
     if (path_result == NULL) { return 0; }
 
-    _clear_spritesheet_list(ctx);
+    //_clear_spritesheet_list(ctx);
 
     strbuf_t *spritesheet = strbuf_create(cstr(path_result), NULL);
 
@@ -122,7 +122,7 @@ void _setup_ctx(Ctx *ctx) {
     Action_Dyna_append(&ctx->actions, action);
 
     // Draw
-    ctx->draw.font_size = 15;
+    ctx->draw.font_size = 16;
     ctx->draw.line_height = 17;
 }
 

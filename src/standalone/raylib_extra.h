@@ -2,6 +2,7 @@
 #define RAYLIB_EXTRA
 
 #include "raylib.h"
+#include "raymath.h"
 #include "strview.h"
 #include "stdio.h"
 #include "strbuf_extra.h"
@@ -169,6 +170,28 @@ void DrawRectangleReci(Rect2i rect, Color color) {
 V2i GetMousePositioni(void) {
     Vector2 mouse = GetMousePosition();
     return (V2i) {{ (int)mouse.x, (int)mouse.y }};
+}
+
+void DrawTextureWithSize(Texture2D texture, Rect2i dest) {
+    DrawTexturePro(
+        texture,
+        (Rectangle) {
+            0, 0,
+            (float)texture.width,
+            (float)texture.height
+        },
+        (Rect2i_to_Rect2(dest)).rect,
+        Vector2Zero(), 0, WHITE
+    );
+}
+
+
+Rect2i Rect2i_add_padding(Rect2i r, int top, int right, int bottom, int left) {
+    return (Rect2i) {{ r.x + left, r.y + top, r.width - left - right, r.height - top - bottom }};
+}
+
+Rect2i Rect2i_add_padding_all(Rect2i r, int pad) {
+    return (Rect2i) {{ r.x + pad, r.y + pad, r.width - pad*2, r.height - pad*2 }};
 }
 
 #endif // !RAYLIB_EXTRA

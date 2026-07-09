@@ -9,10 +9,11 @@
 
 void ui_draw_options(Ctx *ctx, Rect2i area) {
 
-	const int pad = 10;
 	const int line_height = ctx->draw.line_height;
 	int line = 0;
 	V2i pos = { 0 };
+	const int pad = 10;
+
 	pos = (V2i) {{ area.x + pad, area.y + line * line_height }};
 	++line;
 
@@ -46,26 +47,30 @@ void ui_draw_options(Ctx *ctx, Rect2i area) {
 
 void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
 
-	const int pad = 10;
-	const int line_height = ctx->draw.line_height;
-	int line = 0;
-	V2i pos = { 0 };
-	pos = (V2i) {{ area.x + pad, area.y + line * line_height }};
-	++line;
+	const int line_height = ctx->draw.line_height * 2;
+	const int text_pad = 3;
+	const int thumbnail_pad = 3;
 
-	Rect2i line_area = {{ pos.x, pos.y, area.width -pad, line_height }};
-	line_area.y += line_height;
+	Rect2i item_area;
+	Rect2i thumbnail_area;
+	V2i text_offset;
 
 	DrawRectangleReci(area, GRAY);
-	DrawText("Spritesheets:", pos.x, pos.y, ctx->draw.font_size, BLACK);
+	DrawText("Spritesheets:", area.x, area.y, ctx->draw.font_size, BLACK);
+	area.y += ctx->draw.line_height;
 
-	for (int i = 0; i < ctx->spritesheet_list.size; ++i, ++line, line_area.y += line_height)
+	for (int i = 0; i < ctx->spritesheet_list.size; ++i)
 	{
 		Spritesheet *sheet = &ctx->spritesheet_list.items[i];
-		pos = (V2i) {{ (int)area.x + pad, (int)area.y + line * ctx->draw.line_height }};
 
-		if (CheckCollisionPointReci(GetMousePositioni(), line_area)) {
-			DrawRectangleReci(line_area, BLUE);
+		item_area = (Rect2i) {{ area.x, area.y + i * line_height, area.width, line_height }};
+		thumbnail_area = item_area;
+		thumbnail_area.width = thumbnail_area.height;
+		thumbnail_area = Rect2i_add_padding_all(thumbnail_area, thumbnail_pad);
+		text_offset = (V2i) {{ thumbnail_area.x + thumbnail_area.width + text_pad, item_area.y + text_pad }};
+
+		if (CheckCollisionPointReci(GetMousePositioni(), item_area)) {
+			DrawRectangleReci(item_area, BLUE);
 
 			//if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
 				//call_action(ctx, action);
@@ -74,7 +79,10 @@ void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
 
 		DrawText(
 			TextFormat("%"PRIstr, PRIstrarg(strbuf_view2(sheet->path))),
-			pos.x, pos.y, ctx->draw.font_size, BLACK);
+			text_offset.x, text_offset.y, ctx->draw.font_size, BLACK);
+
+		DrawRectangleReci(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
+		DrawTextureWithSize(sheet->texture, thumbnail_area);
 	}
 }
 
