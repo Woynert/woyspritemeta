@@ -101,6 +101,47 @@ int open_image_as_spritesheet(Ctx *ctx) {
 
 int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
 
+void call_action(Ctx *ctx, Action *action) {
+    printfd("[%"PRIstr"]", PRIstrarg(strbuf_view2(action->name)));
+    (*action->op_ptr)(ctx);
+}
+
+/// @Returns Font. Can fail, check with IsFontValid(...).
+Font load_font_with_buncha_codepoints(const char* font_path, int font_size) {
+
+    // Ranges are inclusive.
+    int ranges[] = {
+        0xFFFD,  0xFFFD,  // (�) codepoint
+        32,      127,     // Basic latin
+        0x00A1,  0x00FF,  // C1 Controls and Latin-1 Supplement
+        0x0100,  0x017F,  // Latin Extended-A
+        0x0180,  0x024F,  // Latin Extended-B
+        0x1F300, 0x1F5FF, // Miscellaneous Symbols and Pictographs
+        0x1F600, 0x1F64F, // Emoticons
+    };
+
+    int range_amount = (int)(sizeof(ranges)/sizeof(ranges[0]));
+    int total_codepoints = 0;
+    for (int i = 0; i < range_amount; i += 2) {
+        total_codepoints += ranges[i+1] - ranges[i] +1; // Inclusive
+    }
+
+    int *codepoints = (int*)malloc((size_t)total_codepoints * sizeof(int));
+    int codepoint_count = 0;
+
+    for (int i = 0; i < range_amount; i += 2) {
+        for (int j = ranges[i]; j <= ranges[i+1]; ++j) {
+            codepoints[codepoint_count] = j;
+            ++codepoint_count;
+        }
+    }
+
+    ASSERT(codepoint_count == total_codepoints);
+    Font font = LoadFontEx(font_path, (int)font_size, codepoints, (int)codepoint_count);
+    free(codepoints);
+    return font;
+}
+
 void _setup_ctx(Ctx *ctx) {
     // Actions
     Action action;
@@ -120,16 +161,19 @@ void _setup_ctx(Ctx *ctx) {
     action = (Action) { strbuf_create(0, NULL), open_image_as_spritesheet };
     strbuf_assign(&action.name, cstr_SL("Load image as spritesheet"));
     Action_Dyna_append(&ctx->actions, action);
+}
+
+void ctx_load_assets(Ctx *ctx) {
 
     // Draw
-    ctx->draw.font_size = 16;
-    ctx->draw.line_height = 17;
+    ctx->draw.font_size = 18;
+    ctx->draw.line_spacing = 2;
+    ctx->draw.char_spacing = 0;
+    ctx->draw.line_height = ctx->draw.font_size +ctx->draw.line_spacing;
+    ctx->draw.font = load_font_with_buncha_codepoints(
+            "assets/Roboto-Regular.ttf", ctx->draw.font_size);
 }
 
-void call_action(Ctx *ctx, Action *action) {
-    printfd("[%"PRIstr"]", PRIstrarg(strbuf_view2(action->name)));
-    (*action->op_ptr)(ctx);
-}
 
 
 //void save_new

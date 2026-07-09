@@ -7,6 +7,11 @@
 #include "la.h"
 #include "better_mouse_input.h"
 
+void ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
+	DrawTextEx_strview_i(ctx->draw.font, str, pos, ctx->draw.font_size,
+		ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
+}
+
 void ui_draw_options(Ctx *ctx, Rect2i area) {
 
 	const int line_height = ctx->draw.line_height;
@@ -20,8 +25,8 @@ void ui_draw_options(Ctx *ctx, Rect2i area) {
 	Rect2i line_area = {{ pos.x, pos.y, area.width -pad, line_height }};
 	line_area.y += line_height;
 
-	DrawRectangleReci(area, GRAY);
-	DrawText("Options:", pos.x, pos.y, ctx->draw.font_size, BLACK);
+	DrawRectangleReci(area, LIGHTGRAY);
+	ui_draw_text(ctx, cstr_SL("Options:"), pos, BLACK);
 
 	for (int i = 0; i < ctx->actions.size; ++i)
 	{
@@ -36,9 +41,7 @@ void ui_draw_options(Ctx *ctx, Rect2i area) {
 			}
 		}
 
-		DrawText(
-			TextFormat("%"PRIstr, PRIstrarg(strbuf_view2(action->name))),
-			pos.x, pos.y, ctx->draw.font_size, BLACK);
+		ui_draw_text(ctx, strbuf_view2(action->name), pos, BLACK);
 
 		++line;
 		line_area.y += line_height;
@@ -55,8 +58,8 @@ void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
 	Rect2i thumbnail_area;
 	V2i text_offset;
 
-	DrawRectangleReci(area, GRAY);
-	DrawText("Spritesheets:", area.x, area.y, ctx->draw.font_size, BLACK);
+	DrawRectangleReci(area, LIGHTGRAY);
+	ui_draw_text(ctx, cstr_SL("Spritesheets:"), area.pos, BLACK);
 	area.y += ctx->draw.line_height;
 
 	for (int i = 0; i < ctx->spritesheet_list.size; ++i)
@@ -77,9 +80,7 @@ void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
 			//}
 		}
 
-		DrawText(
-			TextFormat("%"PRIstr, PRIstrarg(strbuf_view2(sheet->path))),
-			text_offset.x, text_offset.y, ctx->draw.font_size, BLACK);
+		ui_draw_text(ctx, strbuf_view2(sheet->path), text_offset, BLACK);
 
 		DrawRectangleReci(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
 		DrawTextureWithSize(sheet->texture, thumbnail_area);

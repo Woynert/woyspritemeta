@@ -42,6 +42,8 @@ Rect2 Rect2i_to_Rect2(Rect2i r)
 Rect2i Rect2_to_Rect2i(Rect2 r)
 { return (Rect2i) {{ (int)r.x, (int)r.y, (int)r.width, (int)r.height }}; }
 
+Vector2 V2i_to_Vector2(V2i v) { return (Vector2) { (float)v.x, (float)v.y }; }
+
 /* For drawing vertically invertex textures (i.e. BeginTextureMode) */
 void DrawTextureRec_flipped (Texture2D texture, Rectangle source, Vector2 position, Color tint) {
     DrawTextureRec( texture, (Rectangle){
@@ -155,6 +157,13 @@ void DrawTextEx_strview(
         }
         i += codepointByteCount;   // Move text bytes counter to next codepoint
     }
+}
+
+void DrawTextEx_strview_i(
+    Font font, const strview_t string, V2i position, int fontSize,
+    int spacing, int textLineSpacing, Color tint
+) {
+    DrawTextEx_strview(font, string, V2i_to_Vector2(position), (float)fontSize, (float)spacing, (float)textLineSpacing, tint);
 }
 
 bool CheckCollisionPointReci(V2i point, Rect2i rec) {

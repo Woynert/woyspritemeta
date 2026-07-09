@@ -39,6 +39,8 @@ int main(void) {
     InitWindow(init_win_w, init_win_h, "woyspritemeta");
     hook_glfw_callbacks(&ctx);
 
+    ctx_load_assets(&ctx);
+
     SetTargetFPS(30);
     while(!WindowShouldClose()) {
         BeginDrawing();

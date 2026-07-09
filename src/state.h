@@ -32,6 +32,9 @@ typedef struct Spritesheet {
 typedef struct Draw {
     int line_height;
     int font_size;
+    int char_spacing;
+    int line_spacing;
+    Font font;
 } Draw;
 
 typedef struct Ctx {
