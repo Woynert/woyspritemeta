@@ -5,6 +5,7 @@
 #include "tinyfiledialogs.h"
 #include "portable_utils.h"
 #include "strbuf_extra.h"
+#include "strnum.h"
 #include "cwalk.h"
 #include "raylib.h"
 
@@ -18,8 +19,8 @@ void _clear_spritesheet_list(Ctx *ctx);
 int open_image_as_spritesheet(Ctx *ctx);
 void call_action(Ctx *ctx, Action *action);
 Font load_font_with_buncha_codepoints(const char* font_path, int font_size);
-void _setup_ctx(Ctx *ctx);
 void ctx_load_assets(Ctx *ctx);
+int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path);
 int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
 
 
@@ -81,36 +82,96 @@ void _clear_spritesheet_list(Ctx *ctx) {
 }
 
 
-int open_image_as_spritesheet(Ctx *ctx) {
-    const char *file_patterns[] = { "*.png" };
-    const char *path_result_cstr = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
-    if (path_result_cstr == NULL) { return 0; }
-    strview_t path_result = cstr(path_result_cstr);
+/// @returns Error.
+int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path) {
+    int return_err = 0;
 
-    //_clear_spritesheet_list(ctx);
+    strbuf_t *aux_str = strbuf_create(file_path, NULL); // Raylib only accepts cstrings :'(
 
-    //strbuf_t *spritesheet = strbuf_create(cstr(path_result), NULL);
+    Texture texture = LoadTexture(aux_str->cstr);
 
-    // Check if file is valid.
-
-    Texture texture = LoadTexture(path_result_cstr);
     if (!IsTextureValid(texture)) {
-        return -1;
+        printfd("WAR: Couldn't load image [%"PRIstr"].", PRIstrarg(file_path));
+        return_err = -1;
+        goto exit;
     };
 
-    printfd("Sucessfully loaded texture %s.", path_result_cstr);
+    printfd("Sucessfully loaded texture %"PRIstr".", PRIstrarg(file_path));
 
-    // Add to list.
+    _add_spritesheet(ctx, file_path, texture);
+    return_err = 0;
 
-    _add_spritesheet(ctx, path_result, texture);
+    exit:
+    {
+        strbuf_destroy(&aux_str);
+        return return_err;
+    }
+}
 
-    //if (cwk_path_has_extension(spritesheet->cstr)) {
 
-    /* If basename ends in 1 or 0 will automatically scan for files with similar
-       naming. Example: sheet1.png will scans for sheet2.png sheet3.png sheet4.png */
+int open_image_as_spritesheet(Ctx *ctx) {
 
-        // TODO: Try and scan for other 
-    //}
+    const char *file_patterns[] = { "*.png" };
+    const char *path_result_cstr = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
+    if (path_result_cstr == NULL) {
+        return -1;
+    }
+    strview_t path = cstr(path_result_cstr);
+
+    _clear_spritesheet_list(ctx);
+
+    int err = _try_load_image_as_spritesheet(ctx, path);
+    if (err != 0) {
+        return -1;
+    }
+
+    strview_t base = path;
+    strview_t extension = { 0 };
+
+    // Extract extension and remove it from base
+
+    if (cwk_path_has_extension(base.data)) {
+        size_t size;
+        cwk_path_get_extension(base.data, &extension.data, &size);
+        extension.size = (int)size;
+
+        base.size -= extension.size;
+    }
+
+    // Check if basename ends in a single digit number.
+
+    strview_t digit_str = strnum_get_all_trailing_digits(base);
+    int digit = strnum_int(digit_str, -1, STRNUM_DEFAULT);
+    if (digit == -1) {
+        return 0;
+    }
+
+    base.size -= digit_str.size;
+
+    if ((0)) {
+        printfd("Basename [%"PRIstr"] Extension [%"PRIstr"]", PRIstrarg(base), PRIstrarg(extension));
+        printfd("basename_digit_str [%"PRIstr"] basename_digit [%d]", PRIstrarg(digit_str), digit);
+    }
+
+    // Traverse frame files.
+    // Check for next frame --> "file_name[digit +1].png"
+    // @note: Currently we don't support zero padded digits like 001 002 003.
+
+    {
+        strbuf_t *possible_file_path = strbuf_create(0, NULL);
+
+        for (;;) {
+            ++digit;
+
+            strbuf_printf(&possible_file_path, "%"PRIstr"%d%"PRIstr"",
+                    PRIstrarg(base), digit, PRIstrarg(extension));
+
+            err = _try_load_image_as_spritesheet(ctx, strbuf_view2(possible_file_path));
+            if (err != 0) { break; }
+        }
+
+        strbuf_destroy(&possible_file_path);
+    }
 
     return 0;
 }

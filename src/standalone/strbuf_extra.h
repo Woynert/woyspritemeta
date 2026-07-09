@@ -150,6 +150,21 @@ bool strview_equal(strview_t str1, strview_t str2)
     return strview_compare(str1, str2) == 0;
 }
 
+bool char_is_digit(char c) {
+    return c >= 0x0030 && c <= 0x0039;
+}
+
+strview_t strnum_get_all_trailing_digits(strview_t s) {
+    int length = 0;
+    for (int i = s.size-1; i > -1; i--) {
+        if (char_is_digit(s.data[i])) {
+            ++length;
+        }
+        else { break; }
+    }
+    return (strview_t) { .data = s.data + s.size - length, .size = length };
+}
+
 /*
 void strbuf_pop_at_index_TEST(void) {
     strbuf_t *line = strbuf_create_init(cstr(""), NULL);
