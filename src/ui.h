@@ -88,22 +88,58 @@ void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
 
 		DrawRectangleReci(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
 		DrawRectangleReci(thumbnail_area, LIGHTGRAY);
-		DrawTextureWithSize(sheet->texture, thumbnail_area);
+		DrawTextureScaled(sheet->texture, thumbnail_area);
 	}
 
 	if (show_preview) {
 		Rect2i preview_area = { .pos = GetMousePositioni(), .size = {{ preview_texture.width, preview_texture.height }} };
 		DrawRectangleReci(Rect2i_add_padding_all(preview_area, -1), BLACK);
 		DrawRectangleReci(preview_area, LIGHTGRAY);
-		DrawTextureWithSize(preview_texture, preview_area);
+		DrawTextureScaled(preview_texture, preview_area);
 	}
+}
+
+void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
+	DrawRectangleReci(area, LIGHTGRAY);
+
+	if (ctx->spritesheet_list.size <= 0) { return; }
+
+	const Texture texture = ctx->spritesheet_list.items[0].texture;
+
+	Rect2i draw_area = Rect2i_add_padding_all(area, 10);
+
+	V2i texture_size = v2i(texture.width, texture.height);
+
+	zoompanel_process(&ctx->zoompanel, texture_size, draw_area);
+
+	V2i panned_origin = v2i_add(draw_area.pos, ctx->zoompanel.offset_from_origin);
+
+	Rect2i final = (Rect2i){
+		.pos = panned_origin,
+		.size = v2f_2i(v2f_mul(v2i_2f(texture_size), v2ff(ctx->zoompanel.zoom)))
+	};
+
+	BeginTextureMode(ctx->draw.aux_viewport);
+
+	ClearBackground(BLANK);
+	DrawTextureScaled(texture, final);
+	DrawRectangleLinesEx((Rect2i_to_Rect2(draw_area)).rect, 1, RED);
+
+	EndTextureMode();
+
+	DrawTextureRec_flipped(ctx->draw.aux_viewport.texture,
+			draw_area, draw_area.pos, WHITE);
 }
 
 void ui_draw_all(Ctx *ctx) {
 
 	// Collect draw functions.
 
-    void (*functions[])(Ctx *ctx, Rect2i area) = { &ui_draw_options, &ui_draw_spritesheet_list };
+    void (*functions[])(Ctx *ctx, Rect2i area) = {
+		&ui_draw_options,
+		&ui_draw_spritesheet_list,
+		&ui_draw_spritesheet,
+	};
 	int function_amount = sizeof(functions)/sizeof(functions[0]);
 
 	// Subdivide window horizontally.

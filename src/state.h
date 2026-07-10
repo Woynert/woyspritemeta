@@ -3,6 +3,7 @@
 
 #include "strbuf.h"
 #include "raylib.h"
+#include "zoompanel.h"
 
 typedef struct Ctx Ctx;
 
@@ -35,6 +36,10 @@ typedef struct Draw {
     int char_spacing;
     int line_spacing;
     Font font;
+
+    /* For when needing to draw to a "canvas" that's gonna be shown partially.*/
+    RenderTexture2D aux_viewport;
+
 } Draw;
 
 typedef struct Ctx {
@@ -45,6 +50,8 @@ typedef struct Ctx {
 
     Action_Dyna actions;
     Spritesheet_Dyna spritesheet_list;
+
+    Zoompanel zoompanel;
 } Ctx;
 
 #endif // !STATE_H

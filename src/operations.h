@@ -48,6 +48,8 @@ void free_ctx(Ctx *ctx) {
     strbuf_destroy(&ctx->curr_project_file_path);
 
     UnloadFont(ctx->draw.font);
+
+    UnloadTexture(ctx->draw.aux_viewport.texture);
 }
 
 int create_new_project(Ctx *ctx) {
@@ -236,6 +238,8 @@ void _setup_ctx(Ctx *ctx) {
     action = (Action) { strbuf_create(0, NULL), open_image_as_spritesheet };
     strbuf_assign(&action.name, cstr_SL("Load image as spritesheet"));
     Action_Dyna_append(&ctx->actions, action);
+
+    zoompanel_init(&ctx->zoompanel, ZOOMPANEL_CONF_PIXEL_PERFECT);
 }
 
 void ctx_load_assets(Ctx *ctx) {
@@ -247,6 +251,9 @@ void ctx_load_assets(Ctx *ctx) {
     ctx->draw.line_height = ctx->draw.font_size +ctx->draw.line_spacing;
     ctx->draw.font = load_font_with_buncha_codepoints(
             "assets/Roboto-Regular.ttf", ctx->draw.font_size);
+
+    ctx->draw.aux_viewport = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
+
 }
 
 

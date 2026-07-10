@@ -45,12 +45,17 @@ Rect2i Rect2_to_Rect2i(Rect2 r)
 Vector2 V2i_to_Vector2(V2i v) { return (Vector2) { (float)v.x, (float)v.y }; }
 
 /* For drawing vertically invertex textures (i.e. BeginTextureMode) */
-void DrawTextureRec_flipped (Texture2D texture, Rectangle source, Vector2 position, Color tint) {
-    DrawTextureRec( texture, (Rectangle){
-        source.x, (float)texture.height - source.height - source.y,
-        source.width, -source.height
-    },
-    position, tint );
+void DrawTextureRec_flipped (Texture2D texture, Rect2i source, V2i position, Color tint) {
+    DrawTextureRec(
+        texture,
+        (Rectangle){
+            (float)source.x,
+            (float)texture.height - (float)source.height - (float)source.y,
+            (float)source.width,
+            -(float)source.height
+        },
+        V2i_to_Vector2(position), tint
+    );
 }
 
 void DrawTexture_flipped(Texture2D texture, int posX, int posY, Color tint)
@@ -181,7 +186,7 @@ V2i GetMousePositioni(void) {
     return (V2i) {{ (int)mouse.x, (int)mouse.y }};
 }
 
-void DrawTextureWithSize(Texture2D texture, Rect2i dest) {
+void DrawTextureScaled(Texture2D texture, Rect2i dest) {
     DrawTexturePro(
         texture,
         (Rectangle) {
