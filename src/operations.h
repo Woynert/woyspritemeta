@@ -239,7 +239,7 @@ void _setup_ctx(Ctx *ctx) {
     strbuf_assign(&action.name, cstr_SL("Load image as spritesheet"));
     Action_Dyna_append(&ctx->actions, action);
 
-    zoompanel_init(&ctx->zoompanel, ZOOMPANEL_CONF_PIXEL_PERFECT);
+    zoompanel_init(&ctx->zoompanel, ZOOMPANEL_CONF_PIXEL_PERFECT, MOUSE_BUTTON_RIGHT);
 }
 
 void ctx_load_assets(Ctx *ctx) {

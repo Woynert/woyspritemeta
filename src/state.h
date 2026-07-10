@@ -42,8 +42,15 @@ typedef struct Draw {
 
 } Draw;
 
+typedef enum SHEETEDITOR_CURSOR {
+    SHEETEDITOR_CURSOR_TWEAK,
+    SHEETEDITOR_CURSOR_ADD,
+    SHEETEDITOR_CURSOR_DELETE,
+    SHEETEDITOR_CURSOR__COUNT,
+} SHEETEDITOR_CURSOR;
+
 typedef struct Ctx {
-    Draw draw; // Draw context.
+    Draw draw;
 
     bool has_project_file_open;
     strbuf_t *curr_project_file_path;
@@ -51,7 +58,11 @@ typedef struct Ctx {
     Action_Dyna actions;
     Spritesheet_Dyna spritesheet_list;
 
+    // Sheeteditor widget.
+
     Zoompanel zoompanel;
+    SHEETEDITOR_CURSOR editor_curr_cursor;
+
 } Ctx;
 
 #endif // !STATE_H

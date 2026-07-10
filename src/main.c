@@ -32,7 +32,7 @@ int main(void) {
     Ctx ctx = { 0 };
     init_ctx(&ctx);
 
-    const int init_win_w = 500;
+    const int init_win_w = 1200;
     const int init_win_h = 500;
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);

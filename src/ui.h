@@ -104,6 +104,8 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 
 	if (ctx->spritesheet_list.size <= 0) { return; }
 
+	// Spritesheet viewport ↓↓↓
+
 	const Texture texture = ctx->spritesheet_list.items[0].texture;
 
 	Rect2i draw_area = Rect2i_add_padding_all(area, 10);
@@ -129,6 +131,33 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 
 	DrawTextureRec_flipped(ctx->draw.aux_viewport.texture,
 			draw_area, draw_area.pos, WHITE);
+
+	// Spritesheet controls
+
+	const int btn_width = 30;
+	Rect2i btn_area = {{
+		.x = draw_area.x + draw_area.width -btn_width, .y = draw_area.y,
+		.width = btn_width, .height = btn_width
+	}};
+	V2i mouse = GetMousePositioni();
+
+	for (int i = 0; i < SHEETEDITOR_CURSOR__COUNT; ++i) {
+		SHEETEDITOR_CURSOR mode = (SHEETEDITOR_CURSOR)i;
+		Color bg_color = ctx->editor_curr_cursor == mode ? BLUE : LIGHTGRAY;
+		
+		DrawRectangleReci(btn_area, BLACK);
+		DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
+
+		if (CheckCollisionPointReci(mouse, btn_area)) {
+			if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
+				ctx->editor_curr_cursor = mode;
+			}
+		}
+
+		btn_area.y += btn_area.height;
+	}
+
+	
 }
 
 void ui_draw_all(Ctx *ctx) {
