@@ -7,10 +7,38 @@
 #include "raylib.h"
 #include "la.h"
 #include "better_mouse_input.h"
+#include "rlgl.h"
 
 void ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
 	DrawTextEx_strview_i(ctx->draw.font, str, pos, ctx->draw.font_size,
 		ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
+}
+
+void ui_draw_text_highlighted(Ctx *ctx, strview_t str, V2i pos, Color tint, Color highlight) {
+	V2i measure = Vector2_to_v2i(MeasureTextEx_woy(ctx->draw.font, str, (float)ctx->draw.font_size, (float)ctx->draw.char_spacing, (float)ctx->draw.line_spacing));
+	DrawRectangleReci((Rect2i){.pos = pos, .size = measure}, highlight);
+	DrawTextEx_strview_i(ctx->draw.font, str, pos, ctx->draw.font_size,
+		ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
+}
+
+void ui_draw_text_outlined(Ctx *ctx, strview_t str, V2i pos, Color tint, int thick, Color outline) {
+	/*
+		Note: Fixes alpha blending.
+		Additionally. This should make font rendering way better ?
+		
+		https://stackoverflow.com/a/77160530/18796401
+		https://github.com/raysan5/raylib/issues/4181
+	*/
+	rlSetBlendFactorsSeparate(0x0302, 0x0303, 1, 0x0303, 0x8006, 0x8006);
+	BeginBlendMode(BLEND_CUSTOM_SEPARATE);
+
+	for (int x = -thick; x <= thick ; ++x) {
+	for (int y = -thick; y <= thick ; ++y) {
+		DrawTextEx_strview_i(ctx->draw.font, str,(V2i){{.x=pos.x + x, .y=pos.y + y}}, ctx->draw.font_size, ctx->draw.char_spacing, ctx->draw.line_spacing, outline);
+	}}
+	DrawTextEx_strview_i(ctx->draw.font, str, (V2i){{.x=pos.x,.y=pos.y}}, ctx->draw.font_size, ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
+
+	EndBlendMode();
 }
 
 void ui_draw_options(Ctx *ctx, Rect2i area) {
@@ -104,10 +132,7 @@ void ui_draw_sprite_list(Ctx *ctx, Rect2i area) {
 
 	static strbuf_t *aux_str = NULL;
 	static bool aux_str_setup = false;
-	if (!aux_str_setup) {
-		aux_str_setup = true;
-		aux_str = strbuf_create(0, NULL);
-	}
+	if (!aux_str_setup) { aux_str_setup = true; aux_str = strbuf_create(0, NULL); }
 
 	const int line_height = ctx->draw.line_height * 2;
 	const int text_pad = 3;
@@ -197,6 +222,10 @@ void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, float scale
 
 void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 
+	static strbuf_t *aux_str = NULL;
+	static bool aux_str_setup = false;
+	if (!aux_str_setup) { aux_str_setup = true; aux_str = strbuf_create(0, NULL); }
+
 	V2i mouse = GetMousePositioni();
 
 	DrawRectangleReci(area, LIGHTGRAY);
@@ -234,6 +263,15 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 	ClearBackground(BLANK);
 	DrawTextureScaled(texture, final);
 	DrawRectangleLinesEx((Rect2i_to_Rect2(draw_area)).rect, 1, RED);
+
+	// Draw current sprites.
+
+	{
+		for (foreach(int, Sprite, i, ctx->sprites.items, ctx->sprites.size)) {
+			Sprite *sprite = i.ref;
+			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, YELLOW, 1.5);
+		}
+	}
 
 	// Selection
 
@@ -276,6 +314,12 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 					ui__spritesheet_draw_scaled_rect_lines(
 						selection,
 						panned_origin, scale, GREEN, 1);
+					
+					strview_t text = strbuf_printf(&aux_str, "%d x %d", selection.size.x, selection.size.y);
+					ui_draw_text_highlighted(
+						ctx, text,
+						v2f_2i(v2f_translate_scale(v2i_add(selection.pos, v2ii(1)), panned_origin, scale)),
+						WHITE, BLACK);
 				}
 				break;
 			}
@@ -289,8 +333,6 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 	// Draw cursor position scaled.
 
 	ui__spritesheet_draw_scaled_rect((Rect2i){.pos = mouse_pos_in_image, .size = v2ii(1)}, panned_origin, scale, GREEN);
-
-	ui__spritesheet_draw_scaled_rect_lines2((Rect2i){.pos = v2i(64, 144), .size = v2ii(16)}, panned_origin, scale, YELLOW, 1.5);
 
 	EndTextureMode();
 

@@ -43,7 +43,9 @@ Rect2 Rect2i_to_Rect2(Rect2i r)
 Rect2i Rect2_to_Rect2i(Rect2 r)
 { return (Rect2i) {{ (int)r.x, (int)r.y, (int)r.width, (int)r.height }}; }
 
-Vector2 V2i_to_Vector2(V2i v) { return (Vector2) { (float)v.x, (float)v.y }; }
+Vector2 v2i_to_Vector2(V2i v) { return (Vector2) { (float)v.x, (float)v.y }; }
+
+V2i Vector2_to_v2i(Vector2 v) { return (V2i) {{ (int)v.x, (int)v.y }}; }
 
 /* For drawing vertically invertex textures (i.e. BeginTextureMode) */
 void DrawTextureRec_flipped (Texture2D texture, Rect2i source, V2i position, Color tint) {
@@ -55,7 +57,7 @@ void DrawTextureRec_flipped (Texture2D texture, Rect2i source, V2i position, Col
             (float)source.width,
             -(float)source.height
         },
-        V2i_to_Vector2(position), tint
+        v2i_to_Vector2(position), tint
     );
 }
 
@@ -167,11 +169,69 @@ void DrawTextEx_strview(
     }
 }
 
+/*
+ * Extracted from rtext.c
+ * @note: Uses strview_t instead of Cstrings.
+ */
+Vector2 MeasureTextEx_woy(Font font, strview_t string, float fontSize, float spacing, float textLineSpacing)
+{
+    Vector2 textSize = { 0 };
+
+    if ((font.texture.id == 0) || (string.data == NULL) || (string.size == 0) || (string.data[0] == '\0')) return textSize; // Security check
+
+    int tempByteCounter = 0;        // Used to count longer text line num chars
+    int byteCounter = 0;
+
+    float textWidth = 0.0f;
+    float tempTextWidth = 0.0f;     // Used to count longer text line width
+
+    float textHeight = fontSize;
+    float scaleFactor = fontSize/(float)font.baseSize;
+
+    int letter = 0;                 // Current character
+    int index = 0;                  // Index position in sprite font
+
+    for (int i = 0; i < string.size;)
+    {
+        byteCounter++;
+
+        int codepointByteCount = 0;
+        letter = GetCodepointNext_woy(&string.data[i], &codepointByteCount, string.size -i);
+        index = GetGlyphIndex_woy(font, letter);
+
+        i += codepointByteCount;
+
+        if (letter != '\n')
+        {
+            if (font.glyphs[index].advanceX > 0) textWidth += (float)font.glyphs[index].advanceX;
+            else textWidth += (font.recs[index].width + (float)font.glyphs[index].offsetX);
+        }
+        else
+        {
+            if (tempTextWidth < textWidth) tempTextWidth = textWidth;
+            byteCounter = 0;
+            textWidth = 0;
+            textHeight += (fontSize + textLineSpacing);
+        }
+
+        if (tempByteCounter < byteCounter) tempByteCounter = byteCounter;
+    }
+
+    if (tempTextWidth < textWidth) tempTextWidth = textWidth;
+
+    textSize.x = tempTextWidth*scaleFactor + ((float)(tempByteCounter - 1)*spacing);
+    textSize.y = textHeight;
+
+    return textSize;
+}
+
+
+
 void DrawTextEx_strview_i(
     Font font, const strview_t string, V2i position, int fontSize,
     int spacing, int textLineSpacing, Color tint
 ) {
-    DrawTextEx_strview(font, string, V2i_to_Vector2(position), (float)fontSize, (float)spacing, (float)textLineSpacing, tint);
+    DrawTextEx_strview(font, string, v2i_to_Vector2(position), (float)fontSize, (float)spacing, (float)textLineSpacing, tint);
 }
 
 bool CheckCollisionPointReci(V2i point, Rect2i rec) {
@@ -249,8 +309,8 @@ void DrawTextureScaled2_flipped(Texture2D texture, Rect2i dest, V2i source) {
 */
 void DrawLineFixed(V2i from, V2i to, float thick, Color tint) {
     DrawLineEx(
-        Vector2Add(V2i_to_Vector2(from), (Vector2){0.5,0.5}),
-        Vector2Add(V2i_to_Vector2(to), (Vector2){0.5,0.5}),
+        Vector2Add(v2i_to_Vector2(from), (Vector2){0.5,0.5}),
+        Vector2Add(v2i_to_Vector2(to), (Vector2){0.5,0.5}),
         thick, tint);
 }
 
@@ -275,5 +335,7 @@ Rect2i Rect2i_from_two_positions(V2i a, V2i b) {
         .height = max_y - min_y
     };
 }
+
+
 
 #endif // !RAYLIB_EXTRA
