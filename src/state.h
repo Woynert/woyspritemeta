@@ -47,6 +47,9 @@ typedef struct Sprite {
 #define DYNA__TYPE Sprite
 #include "da.h"
 
+#define DYNA__TYPE int
+#include "da.h"
+
 typedef struct Draw {
     int line_height;
     int font_size;
@@ -83,10 +86,61 @@ typedef struct Ctx {
         SHEETEDITOR_CURSOR cursor;
         V2i selection_origin;
         bool is_selecting;
+
+        int_Dyna selected_sprites_cursor;
+        int_Dyna selected_sprites;
     } editor;
 
     Sprite_Dyna sprites;
 
 } Ctx;
+
+int _init_ctx(Ctx *ctx) {
+    ctx->actions = Action_Dyna_create();
+    ctx->spritesheet_list = Spritesheet_Dyna_create();
+    ctx->curr_project_file_path = strbuf_create_empty(0, NULL);
+    ctx->editor.selected_sprites_cursor = int_Dyna_create();
+    ctx->editor.selected_sprites = int_Dyna_create();
+    return 0;
+}
+
+void _free_ctx(Ctx *ctx) {
+
+    // Free draw stuf.
+    {
+        UnloadFont(ctx->draw.font);
+        UnloadTexture(ctx->draw.aux_viewport.texture);
+        UnloadTexture(ctx->draw.aux_viewport2.texture);
+    }
+
+    strbuf_destroy(&ctx->curr_project_file_path);
+    for (int i = 0; i < ctx->actions.size; ++i) {
+        strbuf_destroy(&ctx->actions.items[i].name);
+    }
+    Action_Dyna_free(&ctx->actions);
+
+    {
+        // Free spritesheet list.
+        for (dyna_foreach(Spritesheet, i, ctx->spritesheet_list)) {
+            Spritesheet *s = i.ref;
+            strbuf_destroy(&s->path);
+            if (IsImageValid(s->image)) { UnloadImage(s->image); }
+            if (IsTextureValid(s->texture)) { UnloadTexture(s->texture); }
+        }
+        Spritesheet_Dyna_free(&ctx->spritesheet_list);
+    }
+
+    {
+        // Free sprite list.
+        for (int i = 0; i < ctx->sprites.size; ++i) {
+            Sprite *sprite = &ctx->sprites.items[i];
+            strbuf_destroy(&sprite->name);
+        }
+        Sprite_Dyna_free(&ctx->sprites);
+    }
+
+    int_Dyna_free(&ctx->editor.selected_sprites_cursor);
+    int_Dyna_free(&ctx->editor.selected_sprites);
+}
 
 #endif // !STATE_H

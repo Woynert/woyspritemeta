@@ -264,14 +264,30 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 	DrawTextureScaled(texture, final);
 	DrawRectangleLinesEx((Rect2i_to_Rect2(draw_area)).rect, 1, RED);
 
-	// Draw current sprites.
 
 	{
-		for (foreach(int, Sprite, i, ctx->sprites.items, ctx->sprites.size)) {
+		// Draw current sprites.
+		for (dyna_foreach(Sprite, i, ctx->sprites)) {
 			Sprite *sprite = i.ref;
 			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, YELLOW, 1.5);
 		}
+
+		// Draw selected sprites.
+		for (dyna_foreach(int, i, ctx->editor.selected_sprites_cursor)) {
+			int sprite_id = *i.ref;
+			Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
+			if (sprite == NULL) { continue; }
+			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, BLUE, 1.5);
+		}
+		for (dyna_foreach(int, i, ctx->editor.selected_sprites)) {
+			int sprite_id = *i.ref;
+			Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
+			if (sprite == NULL) { continue; }
+			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, BLUE, 1.5);
+		}
 	}
+
+
 
 	// Selection
 
@@ -280,7 +296,6 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 
 		switch(ctx->editor.cursor) {
 			case SHEETEDITOR_CURSOR_TWEAK:
-			{ break; }
 			case SHEETEDITOR_CURSOR_ADD:
 			{
 				if (!ctx->editor.is_selecting &&
@@ -289,6 +304,11 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 				) {
 					ctx->editor.is_selecting = true;
 					ctx->editor.selection_origin = mouse_pos_in_image;
+
+					if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK) {
+						bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+						if (!shift) { spritesheet_clear_selection(ctx); }
+					}
 				}
 				if (ctx->editor.is_selecting &&
 					BetterMouse_is_released(MOUSE_BUTTON_LEFT)
@@ -301,9 +321,15 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 							ctx->editor.selection_origin, mouse_pos_in_image);
 					selection.size = v2i_add(selection.size, v2ii(1));
 
-					if (selection.width != 0 && selection.height != 0) {
-						register_sprite(ctx, selection);
+					if (ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD) {
+						if (selection.width > 1 && selection.height > 1) {
+							register_sprite(ctx, selection);
+						}
 					}
+					else if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK) {
+						spritesheet_commit_selection(ctx);
+					}
+
 				}
 				if (ctx->editor.is_selecting) {
 
@@ -320,6 +346,10 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 						ctx, text,
 						v2f_2i(v2f_translate_scale(v2i_add(selection.pos, v2ii(1)), panned_origin, scale)),
 						WHITE, BLACK);
+
+					if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK) {
+						spritesheet_select_sprites(ctx, selection);
+					}
 				}
 				break;
 			}

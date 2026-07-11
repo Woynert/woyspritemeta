@@ -10,57 +10,69 @@
 #include "raylib.h"
 
 
-void _setup_ctx(Ctx *ctx);
 int init_ctx(Ctx *ctx);
 void free_ctx(Ctx *ctx);
 int create_new_project(Ctx *ctx);
-void _add_spritesheet(Ctx *ctx, strview_t path, Image image, Texture texture);
-void _clear_spritesheet_list(Ctx *ctx);
 int open_image_as_spritesheet(Ctx *ctx);
 void call_action(Ctx *ctx, Action *action);
 Font load_font_with_buncha_codepoints(const char* font_path, int font_size);
 void ctx_load_assets(Ctx *ctx);
-int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path);
 int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
 
-
-
+void _setup_ctx(Ctx *ctx);
+void _add_spritesheet(Ctx *ctx, strview_t path, Image image, Texture texture);
+void _clear_spritesheet_list(Ctx *ctx);
+int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path);
 
 int init_ctx(Ctx *ctx) {
-    ctx->actions = Action_Dyna_create();
-    ctx->spritesheet_list = Spritesheet_Dyna_create();
-    ctx->curr_project_file_path = strbuf_create_empty(0, NULL);
-
+    _init_ctx(ctx);
     _setup_ctx(ctx);
     return 0;
 }
 
 void free_ctx(Ctx *ctx) {
-
-    _clear_spritesheet_list(ctx);
-    Spritesheet_Dyna_free(&ctx->spritesheet_list);
-
-    for (int i = 0; i < ctx->actions.size; ++i) {
-        strbuf_destroy(&ctx->actions.items[i].name);
-    }
-    Action_Dyna_free(&ctx->actions);
-
-    strbuf_destroy(&ctx->curr_project_file_path);
-
-    UnloadFont(ctx->draw.font);
-
-    UnloadTexture(ctx->draw.aux_viewport.texture);
-    UnloadTexture(ctx->draw.aux_viewport2.texture);
-
-    // Free sprite list
-    {
-        for (int i = 0; i < ctx->sprites.size; ++i) {
-            Sprite *sprite = &ctx->sprites.items[i];
-            strbuf_destroy(&sprite->name);
-        }
-        Sprite_Dyna_free(&ctx->sprites);
-    }
+    _free_ctx(ctx);
 }
+
+void _setup_ctx(Ctx *ctx) {
+    // Actions
+    Action action;
+
+    action = (Action) { strbuf_create(0, NULL), create_new_project };
+    strbuf_assign(&action.name, cstr_SL("New Project"));
+    Action_Dyna_append(&ctx->actions, action);
+
+    action = (Action) { strbuf_create(0, NULL), no_op };
+    strbuf_assign(&action.name, cstr_SL("Open Project"));
+    Action_Dyna_append(&ctx->actions, action);
+    
+    action = (Action) { strbuf_create(0, NULL), no_op };
+    strbuf_assign(&action.name, cstr_SL("Save Project"));
+    Action_Dyna_append(&ctx->actions, action);
+
+    action = (Action) { strbuf_create(0, NULL), open_image_as_spritesheet };
+    strbuf_assign(&action.name, cstr_SL("Load image as spritesheet"));
+    Action_Dyna_append(&ctx->actions, action);
+
+    zoompanel_init(&ctx->zoompanel, ZOOMPANEL_CONF_PIXEL_PERFECT, MOUSE_BUTTON_RIGHT);
+}
+
+void ctx_load_assets(Ctx *ctx) {
+
+    // Draw
+    ctx->draw.font_size = 18;
+    ctx->draw.line_spacing = 2;
+    ctx->draw.char_spacing = 0;
+    ctx->draw.line_height = ctx->draw.font_size +ctx->draw.line_spacing;
+    ctx->draw.font = load_font_with_buncha_codepoints(
+            "assets/Roboto-Regular.ttf", ctx->draw.font_size);
+
+    ctx->draw.aux_viewport = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
+    ctx->draw.aux_viewport2 = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
+
+}
+
+
 
 int create_new_project(Ctx *ctx) {
     const char *file_patterns[] = { "*.wsp" };
@@ -248,43 +260,6 @@ Font load_font_with_buncha_codepoints(const char* font_path, int font_size) {
     return font;
 }
 
-void _setup_ctx(Ctx *ctx) {
-    // Actions
-    Action action;
-
-    action = (Action) { strbuf_create(0, NULL), create_new_project };
-    strbuf_assign(&action.name, cstr_SL("New Project"));
-    Action_Dyna_append(&ctx->actions, action);
-
-    action = (Action) { strbuf_create(0, NULL), no_op };
-    strbuf_assign(&action.name, cstr_SL("Open Project"));
-    Action_Dyna_append(&ctx->actions, action);
-    
-    action = (Action) { strbuf_create(0, NULL), no_op };
-    strbuf_assign(&action.name, cstr_SL("Save Project"));
-    Action_Dyna_append(&ctx->actions, action);
-
-    action = (Action) { strbuf_create(0, NULL), open_image_as_spritesheet };
-    strbuf_assign(&action.name, cstr_SL("Load image as spritesheet"));
-    Action_Dyna_append(&ctx->actions, action);
-
-    zoompanel_init(&ctx->zoompanel, ZOOMPANEL_CONF_PIXEL_PERFECT, MOUSE_BUTTON_RIGHT);
-}
-
-void ctx_load_assets(Ctx *ctx) {
-
-    // Draw
-    ctx->draw.font_size = 18;
-    ctx->draw.line_spacing = 2;
-    ctx->draw.char_spacing = 0;
-    ctx->draw.line_height = ctx->draw.font_size +ctx->draw.line_spacing;
-    ctx->draw.font = load_font_with_buncha_codepoints(
-            "assets/Roboto-Regular.ttf", ctx->draw.font_size);
-
-    ctx->draw.aux_viewport = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
-    ctx->draw.aux_viewport2 = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
-
-}
 
 void register_sprite(Ctx *ctx, Rect2i rect) {
     printfd("SAVING SPRITE "V2i_Fmt, V2i_Arg(rect.size));
@@ -294,6 +269,27 @@ void register_sprite(Ctx *ctx, Rect2i rect) {
         .frames = 1,
     };
     Sprite_Dyna_append(&ctx->sprites, sprite);
+}
+
+
+void spritesheet_select_sprites(Ctx *ctx, Rect2i selection) {
+    int_Dyna_clear_preserving(&ctx->editor.selected_sprites_cursor);
+
+    for (dyna_foreach(Sprite, i, ctx->sprites)) {
+        if (Rect2i_collides_Rect2i(selection, i.ref->rect)) {
+            int_Dyna_append(&ctx->editor.selected_sprites_cursor, i.index);
+        }
+    }
+}
+
+void spritesheet_clear_selection(Ctx *ctx) {
+    int_Dyna_clear_preserving(&ctx->editor.selected_sprites);
+}
+
+void spritesheet_commit_selection(Ctx *ctx) {
+    for (dyna_foreach(int, i, ctx->editor.selected_sprites_cursor)) {
+        int_Dyna_append(&ctx->editor.selected_sprites, *i.ref);
+    }
 }
 
 

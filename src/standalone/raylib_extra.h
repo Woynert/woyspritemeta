@@ -336,6 +336,20 @@ Rect2i Rect2i_from_two_positions(V2i a, V2i b) {
     };
 }
 
+bool Rect2i_collides_Rect2i (Rect2i lhs, Rect2i rhs) {
+    int left1   = lhs.pos.x;
+    int right1  = lhs.pos.x + lhs.size.x;
+    int top1    = lhs.pos.y;
+    int bottom1 = lhs.pos.y + lhs.size.y;
+    int left2   = rhs.pos.x;
+    int right2  = rhs.pos.x + rhs.size.x;
+    int top2    = rhs.pos.y;
+    int bottom2 = rhs.pos.y + rhs.size.y;
+    return ! (
+        left1 > right2 || left2 > right1 ||
+        top1 > bottom2 || top2 > bottom1
+    );
+}
 
 
 #endif // !RAYLIB_EXTRA
