@@ -1,6 +1,7 @@
 #ifndef RAYLIB_EXTRA
 #define RAYLIB_EXTRA
 
+#include "portable_utils.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "strview.h"
@@ -17,8 +18,8 @@ typedef union Rect2 {
         float height;
     };
     struct {
-        Vector2 pos;
-        Vector2 size;
+        V2f pos;
+        V2f size;
     };
     Rectangle rect;
 } Rect2;
@@ -60,7 +61,9 @@ void DrawTextureRec_flipped (Texture2D texture, Rect2i source, V2i position, Col
 
 void DrawTexture_flipped(Texture2D texture, int posX, int posY, Color tint)
 {
-    DrawTextureRec(texture, (Rectangle) { (float)posX, (float)posY, (float)texture.width, (float)-texture.height }, (Vector2) { 0, 0 }, tint);
+    DrawTextureRec(texture, (Rectangle) {
+            (float)posX, (float)posY,
+            (float)texture.width, (float)-texture.height }, (Vector2) { 0, 0 }, tint);
 }
 
 /*
@@ -181,9 +184,19 @@ void DrawRectangleReci(Rect2i rect, Color color) {
         (Vector2){ 0.0f, 0.0f }, 0.0f, color);
 }
 
+void DrawRectangleRecf(Rect2 rect, Color color) {
+    DrawRectanglePro(
+        (Rectangle){ rect.x, rect.y, rect.width, rect.height },
+        (Vector2){ 0.0f, 0.0f }, 0.0f, color);
+}
+
 V2i GetMousePositioni(void) {
     Vector2 mouse = GetMousePosition();
     return (V2i) {{ (int)mouse.x, (int)mouse.y }};
+}
+
+void DrawTextureVi(Texture2D texture, V2i pos) {
+    DrawTexture(texture, pos.x, pos.y, WHITE);
 }
 
 void DrawTextureScaled(Texture2D texture, Rect2i dest) {
@@ -199,6 +212,48 @@ void DrawTextureScaled(Texture2D texture, Rect2i dest) {
     );
 }
 
+void DrawTextureScaled2(Texture2D texture, Rect2i dest, V2i source) {
+    DrawTexturePro(
+        texture,
+        (Rectangle) {
+            0, 0,
+            (float)source.x,
+            (float)source.y
+        },
+        (Rect2i_to_Rect2(dest)).rect,
+        Vector2Zero(), 0, WHITE
+    );
+}
+
+void DrawTextureScaled2_flipped(Texture2D texture, Rect2i dest, V2i source) {
+    DrawTexturePro(
+        texture,
+        (Rectangle) {
+            0,
+            (float)(texture.height - source.y),
+            (float)source.x,
+            (float)(-source.y)
+        },
+        (Rect2i_to_Rect2(dest)).rect,
+        Vector2Zero(), 0, WHITE
+    );
+}
+
+/*
+   * AVOID USING THIS. This works on my machine but supposedly this should
+   break on other hardware.
+   * Under OpenGL there is no concept of integer coordinates, so to get closest
+   to pixel perfect you need to add 0.5.
+   * See https://stackoverflow.com/questions/10040961
+   And https://github.com/raysan5/raylib/issues/2744
+*/
+void DrawLineFixed(V2i from, V2i to, float thick, Color tint) {
+    DrawLineEx(
+        Vector2Add(V2i_to_Vector2(from), (Vector2){0.5,0.5}),
+        Vector2Add(V2i_to_Vector2(to), (Vector2){0.5,0.5}),
+        thick, tint);
+}
+
 
 Rect2i Rect2i_add_padding(Rect2i r, int top, int right, int bottom, int left) {
     return (Rect2i) {{ r.x + left, r.y + top, r.width - left - right, r.height - top - bottom }};
@@ -206,6 +261,19 @@ Rect2i Rect2i_add_padding(Rect2i r, int top, int right, int bottom, int left) {
 
 Rect2i Rect2i_add_padding_all(Rect2i r, int pad) {
     return (Rect2i) {{ r.x + pad, r.y + pad, r.width - pad*2, r.height - pad*2 }};
+}
+
+Rect2i Rect2i_from_two_positions(V2i a, V2i b) {
+    int min_x = int_min(a.x, b.x);
+    int min_y = int_min(a.y, b.y);
+    int max_x = int_max(a.x, b.x);
+    int max_y = int_max(a.y, b.y);
+    return (Rect2i) {
+        .x = min_x,
+        .y = min_y,
+        .width = max_x - min_x,
+        .height = max_y - min_y
+    };
 }
 
 #endif // !RAYLIB_EXTRA

@@ -76,7 +76,7 @@ static void  pfx(sort)                        (Dyna *r);
 static void  pfx(sort_range)                  (TYPE *buffer, int from, int to);
 typedef struct { int a; int b; } pfx(_Pair);
 static pfx(_Pair) pfx(_partition)             (TYPE *buffer, int from, int to);
-#endif // !DYNA__ENABLE_COMPARISONS
+#endif
 static bool  pfx(_add_will_overflow_int)      (int a, int b);
 static int   pfx(_round_up_capacity)          (int capacity);
 

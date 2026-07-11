@@ -14,7 +14,7 @@ void _setup_ctx(Ctx *ctx);
 int init_ctx(Ctx *ctx);
 void free_ctx(Ctx *ctx);
 int create_new_project(Ctx *ctx);
-void _add_spritesheet(Ctx *ctx, strview_t path, Texture texture);
+void _add_spritesheet(Ctx *ctx, strview_t path, Image image, Texture texture);
 void _clear_spritesheet_list(Ctx *ctx);
 int open_image_as_spritesheet(Ctx *ctx);
 void call_action(Ctx *ctx, Action *action);
@@ -50,6 +50,16 @@ void free_ctx(Ctx *ctx) {
     UnloadFont(ctx->draw.font);
 
     UnloadTexture(ctx->draw.aux_viewport.texture);
+    UnloadTexture(ctx->draw.aux_viewport2.texture);
+
+    // Free sprite list
+    {
+        for (int i = 0; i < ctx->sprites.size; ++i) {
+            Sprite *sprite = &ctx->sprites.items[i];
+            strbuf_destroy(&sprite->name);
+        }
+        Sprite_Dyna_free(&ctx->sprites);
+    }
 }
 
 int create_new_project(Ctx *ctx) {
@@ -67,8 +77,12 @@ int create_new_project(Ctx *ctx) {
     return 0;
 }
 
-void _add_spritesheet(Ctx *ctx, strview_t path, Texture texture) {
-    Spritesheet s = { .path = strbuf_create(path, NULL), .texture = texture };
+void _add_spritesheet(Ctx *ctx, strview_t path, Image image, Texture texture) {
+    Spritesheet s = {
+        .path = strbuf_create(path, NULL),
+        .image = image,
+        .texture = texture,
+    };
     Spritesheet_Dyna_append(&ctx->spritesheet_list, s);
 }
 
@@ -76,9 +90,8 @@ void _clear_spritesheet_list(Ctx *ctx) {
     for (int i = 0; i < ctx->spritesheet_list.size; ++i) {
         Spritesheet *s = &ctx->spritesheet_list.items[i];
         strbuf_destroy(&s->path);
-        if (IsTextureValid(s->texture)) {
-            UnloadTexture(s->texture);
-        }
+        if (IsImageValid(s->image)) { UnloadImage(s->image); }
+        if (IsTextureValid(s->texture)) { UnloadTexture(s->texture); }
     }
     Spritesheet_Dyna_clear_freeing(&ctx->spritesheet_list);
 }
@@ -90,24 +103,40 @@ int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path) {
 
     strbuf_t *aux_str = strbuf_create(file_path, NULL); // Raylib only accepts cstrings :'(
 
-    Texture texture = LoadTexture(aux_str->cstr);
+    Image image;
+    Texture texture;
 
-    if (!IsTextureValid(texture)) {
+    image = LoadImage(aux_str->cstr);
+    if (!IsImageValid(image)) {
         printfd("WAR: Couldn't load image [%"PRIstr"].", PRIstrarg(file_path));
         return_err = -1;
-        goto exit;
+        goto exit_cleanup;
+    }
+
+    if (image.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
+        printfd("WAR: Image isn't R8G8B8A8, converting...");
+        ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    }
+
+    texture = LoadTextureFromImage(image);
+    if (!IsTextureValid(texture)) {
+        printfd("WAR: Couldn't load texture [%"PRIstr"].", PRIstrarg(file_path));
+        return_err = -1;
+        goto exit_cleanup;
     };
 
     printfd("Sucessfully loaded texture %"PRIstr".", PRIstrarg(file_path));
 
-    _add_spritesheet(ctx, file_path, texture);
-    return_err = 0;
+    _add_spritesheet(ctx, file_path, image, texture);
 
-    exit:
-    {
-        strbuf_destroy(&aux_str);
-        return return_err;
+    exit_cleanup:
+    if ((0)) {
+        UnloadImage(image);
+        UnloadTexture(texture);
     }
+
+    strbuf_destroy(&aux_str);
+    return return_err;
 }
 
 
@@ -253,7 +282,18 @@ void ctx_load_assets(Ctx *ctx) {
             "assets/Roboto-Regular.ttf", ctx->draw.font_size);
 
     ctx->draw.aux_viewport = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
+    ctx->draw.aux_viewport2 = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
 
+}
+
+void register_sprite(Ctx *ctx, Rect2i rect) {
+    printfd("SAVING SPRITE "V2i_Fmt, V2i_Arg(rect.size));
+    Sprite sprite = {
+        .rect = rect,
+        .name = strbuf_create_empty(0, NULL),
+        .frames = 1,
+    };
+    Sprite_Dyna_append(&ctx->sprites, sprite);
 }
 
 

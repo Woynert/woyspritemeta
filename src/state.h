@@ -18,8 +18,22 @@ typedef struct strbuf_wrap {
 
 typedef struct Spritesheet {
     strbuf_t *path;
-    Texture texture;
+    Image image;     /* CPU side. */
+    Texture texture; /* GPU side. */
 } Spritesheet;
+
+typedef struct Sprite {
+    union {
+        struct {
+            V2i offset;
+            V2i size;
+        };
+        Rect2i rect;
+    };
+
+    int frames; /* Calculated by detecting empty sprite. */
+    strbuf_t *name;
+} Sprite;
 
 #define DYNA__TYPE Action
 #include "da.h"
@@ -28,6 +42,9 @@ typedef struct Spritesheet {
 #include "da.h"
 
 #define DYNA__TYPE Spritesheet
+#include "da.h"
+
+#define DYNA__TYPE Sprite
 #include "da.h"
 
 typedef struct Draw {
@@ -39,12 +56,13 @@ typedef struct Draw {
 
     /* For when needing to draw to a "canvas" that's gonna be shown partially.*/
     RenderTexture2D aux_viewport;
+    RenderTexture2D aux_viewport2;
 
 } Draw;
 
 typedef enum SHEETEDITOR_CURSOR {
-    SHEETEDITOR_CURSOR_TWEAK,
     SHEETEDITOR_CURSOR_ADD,
+    SHEETEDITOR_CURSOR_TWEAK,
     SHEETEDITOR_CURSOR_DELETE,
     SHEETEDITOR_CURSOR__COUNT,
 } SHEETEDITOR_CURSOR;
@@ -58,10 +76,16 @@ typedef struct Ctx {
     Action_Dyna actions;
     Spritesheet_Dyna spritesheet_list;
 
-    // Sheeteditor widget.
 
+    // Sheeteditor widget.
     Zoompanel zoompanel;
-    SHEETEDITOR_CURSOR editor_curr_cursor;
+    struct {
+        SHEETEDITOR_CURSOR cursor;
+        V2i selection_origin;
+        bool is_selecting;
+    } editor;
+
+    Sprite_Dyna sprites;
 
 } Ctx;
 
