@@ -337,6 +337,7 @@ Rect2i Rect2i_from_two_positions(V2i a, V2i b) {
 }
 
 bool Rect2i_collides_Rect2i (Rect2i lhs, Rect2i rhs) {
+    // (left -X, right +X, up -Y, down +Y)
     int left1   = lhs.pos.x;
     int right1  = lhs.pos.x + lhs.size.x;
     int top1    = lhs.pos.y;
@@ -348,6 +349,20 @@ bool Rect2i_collides_Rect2i (Rect2i lhs, Rect2i rhs) {
     return ! (
         left1 > right2 || left2 > right1 ||
         top1 > bottom2 || top2 > bottom1
+    );
+}
+
+bool Rect2i_collides_V2i (Rect2i rect, V2i point) {
+    // (left -X, right +X, up -Y, down +Y)
+    int left   = rect.pos.x;
+    int right  = rect.pos.x + rect.size.x;
+    int top    = rect.pos.y;
+    int bottom = rect.pos.y + rect.size.y;
+    int x = point.x;
+    int y = point.y;
+    return ! (
+        left > x || x > right ||
+        top > y || y > bottom
     );
 }
 

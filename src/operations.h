@@ -272,7 +272,7 @@ void register_sprite(Ctx *ctx, Rect2i rect) {
 }
 
 
-void spritesheet_select_sprites(Ctx *ctx, Rect2i selection) {
+void spritesheet_select_append(Ctx *ctx, Rect2i selection) {
     int_Dyna_clear_preserving(&ctx->editor.selected_sprites_cursor);
 
     for (dyna_foreach(Sprite, i, ctx->sprites)) {
@@ -288,9 +288,30 @@ void spritesheet_clear_selection(Ctx *ctx) {
 
 void spritesheet_commit_selection(Ctx *ctx) {
     for (dyna_foreach(int, i, ctx->editor.selected_sprites_cursor)) {
-        int_Dyna_append(&ctx->editor.selected_sprites, *i.ref);
+        if (!int_Dyna_has(&ctx->editor.selected_sprites, *i.ref)) {
+            int_Dyna_append(&ctx->editor.selected_sprites, *i.ref);
+        }
+    }
+
+    int_Dyna_clear_preserving(&ctx->editor.selected_sprites_cursor);
+}
+
+void spritesheet_select_toggle(Ctx *ctx, V2i point) {
+    int_Dyna_clear_preserving(&ctx->editor.selected_sprites_cursor);
+
+    // Simple click -> Toggle.
+    for (dyna_foreach(Sprite, i, ctx->sprites)) {
+        if (Rect2i_collides_Rect2i((Rect2i){.pos=point, .size=v2ii(1)}, i.ref->rect)) {
+            int out_i = -1;
+            if (int_Dyna_find(&ctx->editor.selected_sprites, i.index, &out_i)) {
+                int_Dyna_remove_at(&ctx->editor.selected_sprites, out_i);
+            } else {
+                int_Dyna_append(&ctx->editor.selected_sprites, i.index);
+            }
+        }
     }
 }
+
 
 
 

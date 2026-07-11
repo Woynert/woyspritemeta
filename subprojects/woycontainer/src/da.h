@@ -389,5 +389,5 @@ static int pfx(_round_up_capacity) (int capacity) {
 #ifndef DYNA__MACROS
 #define DYNA__MACROS
 #define dyna_foreach(type, iter, array) \
-	struct { int index; type *ref; } iter = { .index = 0, .ref = array.items }; iter.index < array.size; ++iter.index, ++iter.ref
+	struct { int index; type *ref; } iter = { .index = 0, .ref = (array).items }; iter.index < (array).size; ++iter.index, ++iter.ref
 #endif

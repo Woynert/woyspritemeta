@@ -9,6 +9,20 @@
 #include "better_mouse_input.h"
 #include "rlgl.h"
 
+#define UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req) do {  \
+	if (req != NULL && req->request_focus_area) {     \
+		req->success = true;                          \
+		req->focus_area = widget.area;                \
+		return;                                       \
+	}} while (0)
+
+
+
+int ui__calculate_focus(const Widget_view widgets);
+void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, int count);
+
+
+
 void ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
 	DrawTextEx_strview_i(ctx->draw.font, str, pos, ctx->draw.font_size,
 		ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
@@ -41,8 +55,37 @@ void ui_draw_text_outlined(Ctx *ctx, strview_t str, V2i pos, Color tint, int thi
 	EndBlendMode();
 }
 
-void ui_draw_options(Ctx *ctx, Rect2i area) {
+void ui__spritesheet_draw_scaled_rect(Rect2i r, V2i translate, float scale, Color tint) {
+	DrawRectangleRecf((Rect2) {
+		.pos = v2f_translate_scale(r.pos, translate, scale),
+		.size = v2f_mul(v2i_2f(r.size), v2ff(scale))
+	}, tint);
+}
 
+void ui__spritesheet_draw_scaled_rect_lines2(Rect2i r, V2i translate, float scale, Color tint, float thick) {
+	DrawRectangleLinesEx((Rect2) {
+		.pos = v2f_translate_scale(r.pos, translate, scale),
+		.size = v2f_mul(v2i_2f(r.size), v2ff(scale))
+	}.rect, thick, tint);
+}
+
+void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, float scale, Color tint, int thick) {
+	Rect2i line;
+	line = (Rect2i) {{ .x = r.pos.x, .y = r.pos.y, .width = r.size.x, .height = thick }}; // Top
+	ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
+	line = (Rect2i) {{ .x = r.pos.x, .y = r.pos.y, .width = thick, .height = r.size.y }}; // Left
+	ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
+	line = (Rect2i) {{ .x = r.pos.x + r.size.x - thick, .y = r.pos.y, .width = thick, .height = r.size.y }}; // Right
+	ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
+	line = (Rect2i) {{ .x = r.pos.x, .y = r.pos.y + r.size.y - thick, .width = r.size.x, .height = thick }}; // Bottom
+	ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
+}
+
+void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+
+	UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
+
+	Rect2i area = widget.area;
 	const int line_height = ctx->draw.line_height;
 	int line = 0;
 	V2i pos = { 0 };
@@ -62,7 +105,7 @@ void ui_draw_options(Ctx *ctx, Rect2i area) {
 		Action *action = &ctx->actions.items[i];
 		pos = (V2i) {{ (int)area.x + pad, (int)area.y + line * ctx->draw.line_height }};
 
-		if (CheckCollisionPointReci(GetMousePositioni(), line_area)) {
+		if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), line_area)) {
 			DrawRectangleReci(line_area, BLUE);
 
 			if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
@@ -77,8 +120,11 @@ void ui_draw_options(Ctx *ctx, Rect2i area) {
 	}
 }
 
-void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
+void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
+	UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
+
+	Rect2i area = widget.area;
 	const int line_height = ctx->draw.line_height * 2;
 	const int text_pad = 3;
 	const int thumbnail_pad = 3;
@@ -104,7 +150,7 @@ void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
 		thumbnail_area = Rect2i_add_padding_all(thumbnail_area, thumbnail_pad);
 		text_offset = (V2i) {{ thumbnail_area.x + thumbnail_area.width + text_pad, item_area.y + text_pad }};
 
-		if (CheckCollisionPointReci(GetMousePositioni(), item_area)) {
+		if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
 			DrawRectangleReci(item_area, BLUE);
 
 			if (BetterMouse_is_held(MOUSE_BUTTON_LEFT)) {
@@ -128,11 +174,16 @@ void ui_draw_spritesheet_list(Ctx *ctx, Rect2i area) {
 	}
 }
 
-void ui_draw_sprite_list(Ctx *ctx, Rect2i area) {
+void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+
+	UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
 
 	static strbuf_t *aux_str = NULL;
 	static bool aux_str_setup = false;
 	if (!aux_str_setup) { aux_str_setup = true; aux_str = strbuf_create(0, NULL); }
+
+
+	Rect2i area = widget.area;
 
 	const int line_height = ctx->draw.line_height * 2;
 	const int text_pad = 3;
@@ -159,7 +210,7 @@ void ui_draw_sprite_list(Ctx *ctx, Rect2i area) {
 		thumbnail_area = Rect2i_add_padding_all(thumbnail_area, thumbnail_pad);
 		text_offset = (V2i) {{ thumbnail_area.x + thumbnail_area.width + text_pad, item_area.y + text_pad }};
 
-		if (CheckCollisionPointReci(GetMousePositioni(), item_area)) {
+		if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
 			DrawRectangleReci(item_area, BLUE);
 
 			//if (BetterMouse_is_held(MOUSE_BUTTON_LEFT)) {
@@ -194,37 +245,54 @@ void ui_draw_sprite_list(Ctx *ctx, Rect2i area) {
 	//}
 }
 
-void ui__spritesheet_draw_scaled_rect(Rect2i r, V2i translate, float scale, Color tint) {
-	DrawRectangleRecf((Rect2) {
-		.pos = v2f_translate_scale(r.pos, translate, scale),
-		.size = v2f_mul(v2i_2f(r.size), v2ff(scale))
-	}, tint);
+
+void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+
+	Rect2i area = widget.area;
+	V2i mouse = GetMousePositioni();
+
+	const int btn_width = 30;
+	Rect2i btn_area = {{
+		.x = area.x + area.width -btn_width, .y = area.y,
+		.width = btn_width, .height = btn_width
+	}};
+
+	{
+		// Report area of focus.
+		if (req != NULL && req->request_focus_area) {
+			req->success = true;
+			req->focus_area = btn_area;
+			req->focus_area.height *= SHEETEDITOR_CURSOR__COUNT;
+			return;
+		}
+	}
+
+	for (int i = 0; i < SHEETEDITOR_CURSOR__COUNT; ++i) {
+		SHEETEDITOR_CURSOR mode = (SHEETEDITOR_CURSOR)i;
+		Color bg_color = ctx->editor.cursor == mode ? BLUE : LIGHTGRAY;
+		
+		DrawRectangleReci(btn_area, BLACK);
+		DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
+
+		if (widget.focused && CheckCollisionPointReci(mouse, btn_area)) {
+			if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
+				ctx->editor.cursor = mode;
+			}
+		}
+
+		btn_area.y += btn_area.height;
+	}
 }
 
-void ui__spritesheet_draw_scaled_rect_lines2(Rect2i r, V2i translate, float scale, Color tint, float thick) {
-	DrawRectangleLinesEx((Rect2) {
-		.pos = v2f_translate_scale(r.pos, translate, scale),
-		.size = v2f_mul(v2i_2f(r.size), v2ff(scale))
-	}.rect, thick, tint);
-}
+void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, float scale, Color tint, int thick) {
-	Rect2i line;
-	line = (Rect2i) {{ .x = r.pos.x, .y = r.pos.y, .width = r.size.x, .height = thick }}; // Top
-	ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
-	line = (Rect2i) {{ .x = r.pos.x, .y = r.pos.y, .width = thick, .height = r.size.y }}; // Left
-	ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
-	line = (Rect2i) {{ .x = r.pos.x + r.size.x - thick, .y = r.pos.y, .width = thick, .height = r.size.y }}; // Right
-	ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
-	line = (Rect2i) {{ .x = r.pos.x, .y = r.pos.y + r.size.y - thick, .width = r.size.x, .height = thick }}; // Bottom
-	ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
-}
-
-void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
+	UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
 
 	static strbuf_t *aux_str = NULL;
 	static bool aux_str_setup = false;
 	if (!aux_str_setup) { aux_str_setup = true; aux_str = strbuf_create(0, NULL); }
+
+	Rect2i area = widget.area;
 
 	V2i mouse = GetMousePositioni();
 
@@ -273,13 +341,13 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 		}
 
 		// Draw selected sprites.
-		for (dyna_foreach(int, i, ctx->editor.selected_sprites_cursor)) {
+		for (dyna_foreach(int, i, ctx->editor.selected_sprites)) {
 			int sprite_id = *i.ref;
 			Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
 			if (sprite == NULL) { continue; }
-			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, BLUE, 1.5);
+			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, RED, 3.5);
 		}
-		for (dyna_foreach(int, i, ctx->editor.selected_sprites)) {
+		for (dyna_foreach(int, i, ctx->editor.selected_sprites_cursor)) {
 			int sprite_id = *i.ref;
 			Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
 			if (sprite == NULL) { continue; }
@@ -292,7 +360,7 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 	// Selection
 
 	{
-		bool mouse_inside = CheckCollisionPointReci(mouse, draw_area);
+		bool mouse_inside = widget.focused && CheckCollisionPointReci(mouse, draw_area);
 
 		switch(ctx->editor.cursor) {
 			case SHEETEDITOR_CURSOR_TWEAK:
@@ -327,7 +395,11 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 						}
 					}
 					else if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK) {
-						spritesheet_commit_selection(ctx);
+						if (v2i_eq(ctx->editor.selection_origin, mouse_pos_in_image)) {
+							spritesheet_select_toggle(ctx, mouse_pos_in_image);
+						} else {
+							spritesheet_commit_selection(ctx);
+						}
 					}
 
 				}
@@ -348,7 +420,7 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 						WHITE, BLACK);
 
 					if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK) {
-						spritesheet_select_sprites(ctx, selection);
+						spritesheet_select_append(ctx, selection);
 					}
 				}
 				break;
@@ -369,32 +441,64 @@ void ui_draw_spritesheet(Ctx *ctx, Rect2i area) {
 	DrawTextureRec_flipped(ctx->draw.aux_viewport.texture,
 			draw_area, draw_area.pos, WHITE);
 
-	// Spritesheet controls
-
-	const int btn_width = 30;
-	Rect2i btn_area = {{
-		.x = draw_area.x + draw_area.width -btn_width, .y = draw_area.y,
-		.width = btn_width, .height = btn_width
-	}};
-
-	for (int i = 0; i < SHEETEDITOR_CURSOR__COUNT; ++i) {
-		SHEETEDITOR_CURSOR mode = (SHEETEDITOR_CURSOR)i;
-		Color bg_color = ctx->editor.cursor == mode ? BLUE : LIGHTGRAY;
-		
-		DrawRectangleReci(btn_area, BLACK);
-		DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
-
-		if (CheckCollisionPointReci(mouse, btn_area)) {
-			if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
-				ctx->editor.cursor = mode;
-			}
-		}
-
-		btn_area.y += btn_area.height;
-	}
 
 	if (BetterMouse_is_held(MOUSE_BUTTON_LEFT)) {
 		printfd("Selected pixel is: "V2i_Fmt"", V2i_Arg(mouse_pos_in_image));
+	}
+}
+
+
+void ui_widget_spritesheet(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+
+	UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
+
+	Widget widgets[] = {
+		{ .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_viewport, },
+		{ .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_cursors },
+	};
+
+	ui__calculate_focus_and_draw_widgets(ctx, widgets, arraysize(widgets));
+}
+
+
+/// @returns Index of widget with focus or -1.
+int ui__calculate_focus(const Widget_view widgets) {
+	for (int i = widgets.size-1; i > -1; --i) {
+		Rect2i area = widgets.items[i].focus_area;
+		if (Rect2i_collides_V2i(area, GetMousePositioni())) { return i; }
+	}
+	return -1;
+}
+
+
+void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, int count) {
+	// Update focus areas.
+
+	for (int i = 0; i < count; ++i)
+	{
+		Widget *w = &widgets[i];
+		WidgetReq req = { .request_focus_area = true };
+
+		(w->draw_function)(ctx, w->draw, &req);
+
+		if (req.success) {
+			w->focus_area = req.focus_area;
+		} else {
+			printfd("WAR: Widget %d didn't respond.", i);
+			w->focus_area = w->draw.area;
+		}
+	}
+
+	int focus = ui__calculate_focus((Widget_view){ widgets, count });
+	if (int_in_range_inclusive(0, count-1, focus)) {
+		widgets[focus].draw.focused = true;
+	}
+
+	// Draw.
+
+	for (int i = 0; i < count; ++i) {
+		Widget *w = &widgets[i];
+		(w->draw_function)(ctx, w->draw, NULL);
 	}
 }
 
@@ -402,30 +506,33 @@ void ui_draw_all(Ctx *ctx) {
 
 	// Collect draw functions.
 
-    void (*functions[])(Ctx *ctx, Rect2i area) = {
-		&ui_draw_options,
-		&ui_draw_spritesheet_list,
-		&ui_draw_sprite_list,
-		&ui_draw_spritesheet,
+	Widget widgets[] = {
+		{ .draw_function = ui_widget_options,          },
+		{ .draw_function = ui_widget_spritesheet_list, },
+		{ .draw_function = ui_widget_sprite_list,      },
+		{ .draw_function = ui_widget_spritesheet,      },
 	};
-	int function_amount = sizeof(functions)/sizeof(functions[0]);
+	int percentages[] = {
+		10,
+		15,
+		15,
+		60
+	};
+	STATIC_ASSERT(arraysizei(widgets) == arraysizei(percentages));
 
 	// Subdivide window horizontally.
 
-	const int pad = 2;
-	Rect2i chunk = {{ 0, 0, GetScreenWidth()/function_amount, GetScreenHeight() }};
-	Rect2i area = chunk;
-	Rect2i area_paded;
+	const int PAD = 2;
+	Rect2i area = {{ 0, 0, 0, GetScreenHeight() }};
 
-	for (int i = 0; i < function_amount; ++i) {
-		area_paded = (Rect2i) {{ area.x +pad, area.y +pad, area.width -pad*2, area.height -pad*2 }};
-
-		(*functions[i])(ctx, area_paded);
-
+	for(foreach_auto(Widget, widget, widgets))
+	{
 		area.x += area.width;
+		area.width = (int)(((float)percentages[widget.index] / 100.f) * (float)GetScreenWidth());
+		widget.ref->draw.area = Rect2i_add_padding_all(area, PAD);
 	}
 
-	//Texture t
+	ui__calculate_focus_and_draw_widgets(ctx, widgets, arraysize(widgets));
 }
 
 #endif // !UI

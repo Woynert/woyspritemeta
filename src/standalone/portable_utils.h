@@ -92,6 +92,8 @@ static int int_digit_places (int n) {
 
 #define static_assert _Static_assert
 
+#define STATIC_ASSERT(x) static_assert(x, #x)
+
 #define printfd(fmt, ...) \
     do { \
         printf(ANSI_YEL fmt, ##__VA_ARGS__); \
@@ -100,10 +102,14 @@ static int int_digit_places (int n) {
 
 #define PRIbool(arg) (arg ? "true" : "false")
 
-#define foreachi(type_i, type_item, iter, array, size) \
-	struct { type_i index; type_item *ref; } iter = { .index = 0, .ref = array }; iter.index < size; ++iter.index, ++iter.ref
+#define arraysize(array)  (sizeof((array))/sizeof((array)[0]))
+#define arraysizei(array) ((int)(sizeof((array))/sizeof((array)[0])))
 
+#define foreachi(type_i, type_item, iter, array, size) \
+	struct { type_i index; type_item *ref; } iter = { .index = 0, .ref = (array) }; iter.index < size; ++iter.index, ++iter.ref
 #define foreach(type_item, iter, array, size) \
 	foreachi(int, type_item, iter, array, size)
+#define foreach_auto(type_item, iter, array) \
+	foreachi(int, type_item, iter, array, arraysizei(array))
 
 #endif

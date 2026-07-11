@@ -48,6 +48,7 @@ typedef struct Sprite {
 #include "da.h"
 
 #define DYNA__TYPE int
+#define DYNA__ENABLE_COMPARISONS
 #include "da.h"
 
 typedef struct Draw {
@@ -142,5 +143,28 @@ void _free_ctx(Ctx *ctx) {
     int_Dyna_free(&ctx->editor.selected_sprites_cursor);
     int_Dyna_free(&ctx->editor.selected_sprites);
 }
+
+typedef struct WidgetDraw {
+    Rect2i area;
+    bool focused;
+} WidgetDraw;
+
+typedef struct WidgetReq {
+    bool success;
+    bool request_focus_area;
+    Rect2i focus_area;
+} WidgetReq;
+
+typedef struct Widget {
+    WidgetDraw draw;
+    Rect2i focus_area;
+    void (*draw_function)(Ctx *ctx, const WidgetDraw widget, WidgetReq *req);
+} Widget;
+
+#define MAKEVIEW__TYPE Rect2i
+#include "make_view.h"
+
+#define MAKEVIEW__TYPE Widget
+#include "make_view.h"
 
 #endif // !STATE_H
