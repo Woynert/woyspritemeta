@@ -258,7 +258,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 	}};
 
 	{
-		// Report area of focus.
+		// Report focusable area.
 		if (req != NULL && req->request_focus_area) {
 			req->success = true;
 			req->focus_area = btn_area;
@@ -276,7 +276,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 
 		if (widget.focused && CheckCollisionPointReci(mouse, btn_area)) {
 			if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
-				ctx->editor.cursor = mode;
+				spritesheet_try_set_cursor_mode(ctx, mode);
 			}
 		}
 
@@ -326,6 +326,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 	V2i mouse_pos_in_image = v2f_2i(v2f_mul(
 		v2f_div(v2i_2f(mouse_from_image_origin), v2i_2f(scaled_size)),
 		v2i_2f(texture_size)));
+	ctx->editor.mouse_pos = mouse_pos_in_image;
 
 	// Draw on screen.
 
@@ -339,7 +340,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 		// Draw current sprites.
 		for (dyna_foreach(Sprite, i, ctx->sprites)) {
 			Sprite *sprite = i.ref;
-			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, YELLOW, 1.5);
+			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, YELLOW, 2);
 		}
 
 		// Draw selected sprites.
@@ -347,13 +348,17 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 			int sprite_id = *i.ref;
 			Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
 			if (sprite == NULL) { continue; }
-			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, BLUE, 1.5);
+			if (ctx->editor.cursor == SHEETEDITOR_CURSOR_MOVE) {
+				ui__spritesheet_draw_scaled_rect_lines(sprite->rect, panned_origin, scale, BLUE, 1);
+			} else {
+				ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, BLUE, 2);
+			}
 		}
 		for (dyna_foreach(int, i, ctx->editor.selected_sprites_cursor)) {
 			int sprite_id = *i.ref;
 			Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
 			if (sprite == NULL) { continue; }
-			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, BLUE, 1.5);
+			ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, BLUE, 2);
 		}
 	}
 
@@ -361,7 +366,9 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
 	// Selection
 
-	{
+	if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK ||
+	    ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
+	) {
 		bool mouse_inside = widget.focused && CheckCollisionPointReci(mouse, draw_area);
 		bool pressed_inside = false;
 		bool released_inside = false;

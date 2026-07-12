@@ -65,9 +65,9 @@ typedef struct Draw {
 } Draw;
 
 typedef enum SHEETEDITOR_CURSOR {
-    SHEETEDITOR_CURSOR_ADD,
     SHEETEDITOR_CURSOR_TWEAK,
-    //SHEETEDITOR_CURSOR_DELETE,
+    SHEETEDITOR_CURSOR_ADD,
+    SHEETEDITOR_CURSOR_MOVE,
     SHEETEDITOR_CURSOR__COUNT,
 } SHEETEDITOR_CURSOR;
 
@@ -86,10 +86,14 @@ typedef struct Ctx {
     struct {
         SHEETEDITOR_CURSOR cursor;
         V2i selection_origin;
+        V2i mouse_pos; // @Note: Pixel position in spritesheet image.
         bool is_selecting;
 
         int_Dyna selected_sprites_cursor;
         int_Dyna selected_sprites;
+
+        V2i drag_prev_mouse_pos; // @Note: This also represents the latest commited drag endpoint.
+        V2i drag_origin;
     } editor;
 
     Sprite_Dyna sprites;
