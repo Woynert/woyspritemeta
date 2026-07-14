@@ -5,7 +5,6 @@
 #include "better_mouse_input.h"
 #include "state.h"
 #include "ui.h"
-#include "tinyfiledialogs.h"
 #include "quick_monitor.h"
 
 #define LA_IMPLEMENTATION
