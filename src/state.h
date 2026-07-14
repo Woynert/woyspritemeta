@@ -4,6 +4,8 @@
 #include "strbuf.h"
 #include "raylib.h"
 #include "zoompanel.h"
+#include "arena.h"
+#include "strbuf+arena_extra.h"
 
 typedef struct Ctx Ctx;
 
@@ -79,6 +81,7 @@ typedef struct Ctx {
 
     Action_Dyna actions;
     Spritesheet_Dyna spritesheet_list;
+    V2i spritesheet_image_size;
 
 
     // Sheeteditor widget.
@@ -98,6 +101,13 @@ typedef struct Ctx {
 
     Sprite_Dyna sprites;
 
+    // [ Arenas ]
+    struct {
+        ArenaRoot root;
+        Arena arena;
+        strbuf_allocator_t strbuf_alloc;
+    } frame_arena;
+    // [ Arenas ]
 } Ctx;
 
 int _init_ctx(Ctx *ctx) {
@@ -106,6 +116,9 @@ int _init_ctx(Ctx *ctx) {
     ctx->curr_project_file_path = strbuf_create_empty(0, NULL);
     ctx->editor.selected_sprites_cursor = int_Dyna_create();
     ctx->editor.selected_sprites = int_Dyna_create();
+    ctx->frame_arena.root = ArenaRoot_create(1024 * 1024 * 10); // 10 MB.
+    ctx->frame_arena.arena = ArenaRoot_get_arena(ctx->frame_arena.root);
+    ctx->frame_arena.strbuf_alloc = make_arena_strbuf_allocator(&ctx->frame_arena.arena);
     return 0;
 }
 
@@ -146,6 +159,7 @@ void _free_ctx(Ctx *ctx) {
 
     int_Dyna_free(&ctx->editor.selected_sprites_cursor);
     int_Dyna_free(&ctx->editor.selected_sprites);
+    ArenaRoot_free(&ctx->frame_arena.root);
 }
 
 typedef struct WidgetDraw {

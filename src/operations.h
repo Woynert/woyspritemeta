@@ -168,6 +168,11 @@ int open_image_as_spritesheet(Ctx *ctx) {
         return -1;
     }
 
+    // Save dimensions
+
+    ctx->spritesheet_image_size.x = ctx->spritesheet_list.items[0].texture.width;
+    ctx->spritesheet_image_size.y = ctx->spritesheet_list.items[0].texture.height;
+
     strview_t base = path;
     strview_t extension = { 0 };
 
@@ -254,7 +259,7 @@ Font load_font_with_buncha_codepoints(const char* font_path, int font_size) {
         }
     }
 
-    ASSERT(codepoint_count == total_codepoints);
+    wassert(codepoint_count == total_codepoints);
     Font font = LoadFontEx(font_path, (int)font_size, codepoints, (int)codepoint_count);
     free(codepoints);
     return font;
@@ -262,6 +267,10 @@ Font load_font_with_buncha_codepoints(const char* font_path, int font_size) {
 
 
 void register_sprite(Ctx *ctx, Rect2i rect) {
+    if (rect.x < 0 || rect.x >= ctx->spritesheet_image_size.x ||
+        rect.y < 0 || rect.y >= ctx->spritesheet_image_size.y)
+    { return; }
+
     printfd("SAVING SPRITE "V2i_Fmt, V2i_Arg(rect.size));
     Sprite sprite = {
         .rect = rect,

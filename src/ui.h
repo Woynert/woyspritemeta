@@ -178,10 +178,7 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
 	UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
 
-	static strbuf_t *aux_str = NULL;
-	static bool aux_str_setup = false;
-	if (!aux_str_setup) { aux_str_setup = true; aux_str = strbuf_create(0, NULL); }
-
+	strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
 
 	Rect2i area = widget.area;
 
@@ -288,9 +285,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
 	UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
 
-	static strbuf_t *aux_str = NULL;
-	static bool aux_str_setup = false;
-	if (!aux_str_setup) { aux_str_setup = true; aux_str = strbuf_create(0, NULL); }
+	strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
 
 	Rect2i area = widget.area;
 
@@ -317,7 +312,6 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 		.pos = panned_origin,
 		.size = scaled_size,
 	};
-
 
 	// Get cursor position
 
@@ -449,7 +443,7 @@ void ui_widget_spritesheet(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 		{ .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_cursors },
 	};
 
-	ui__calculate_focus_and_draw_widgets(ctx, widgets, arraysize(widgets));
+	ui__calculate_focus_and_draw_widgets(ctx, widgets, countof(widgets));
 }
 
 
@@ -510,7 +504,7 @@ void ui_draw_all(Ctx *ctx) {
 		15,
 		60
 	};
-	STATIC_ASSERT(arraysizei(widgets) == arraysizei(percentages));
+	wstatic_assert(countofi(widgets) == countofi(percentages));
 
 	// Subdivide window horizontally.
 
@@ -524,7 +518,7 @@ void ui_draw_all(Ctx *ctx) {
 		widget.ref->draw.area = Rect2i_add_padding_all(area, PAD);
 	}
 
-	ui__calculate_focus_and_draw_widgets(ctx, widgets, arraysize(widgets));
+	ui__calculate_focus_and_draw_widgets(ctx, widgets, countof(widgets));
 }
 
 #endif // !UI

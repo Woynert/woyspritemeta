@@ -6,6 +6,7 @@
 #include "state.h"
 #include "ui.h"
 #include "tinyfiledialogs.h"
+#include "quick_monitor.h"
 
 #define LA_IMPLEMENTATION
 #include "la.h"
@@ -21,8 +22,8 @@ void glfw_scroll_callback(GLFWwindow* w, double xoffset, double yoffset) {
 void hook_glfw_callbacks(Ctx *ctx) {
     GLFWwindow* window = (GLFWwindow*)GetWindowHandle();
     glfwSetWindowUserPointer(window, ctx);
-    ASSERT(glfwSetMouseButtonCallback(window, glfw_mouse_callback));
-    ASSERT(glfwSetScrollCallback(window, glfw_scroll_callback));
+    wassert(glfwSetMouseButtonCallback(window, glfw_mouse_callback));
+    wassert(glfwSetScrollCallback(window, glfw_scroll_callback));
 }
 
 void process_quit_key_combo(void) {
@@ -61,19 +62,20 @@ int main(void) {
 
         BeginDrawing();
         ClearBackground(BLACK);
+        
+        // Reset arena.
+        ctx.frame_arena.arena = ArenaRoot_get_arena(ctx.frame_arena.root);
 
-        // ...
-        /*DrawFPS(0,0);*/
-        /*if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {*/
-            /*printfd("HERE!");*/
-            /*tinyfd_messageBox("My title", "My message", "okcancel", "info", 0);*/
-            /*char * result = tinyfd_inputBox("My title", "Insert name", " ");*/
-            /*printfd("[%s]", result);*/
-        /*}*/
 
         ui_draw_all(&ctx);
         editor_process_keybinds(&ctx);
         editor_process_cursor_drag(&ctx);
+
+        quickmonitor_draw();
+        quickmonitor_line("fps %d", GetFPS());
+        ptrdiff_t used = (ptrdiff_t)(ctx.frame_arena.arena.beg - ctx.frame_arena.root.beg);
+        ptrdiff_t total = (ptrdiff_t)(ctx.frame_arena.root.end - ctx.frame_arena.root.beg);
+        quickmonitor_line("frame_arena %td/%td (%.3f%%)", used, total, ((float)used/(float)total)*100.0);
 
         BetterMouse_consume_all();
         EndDrawing();

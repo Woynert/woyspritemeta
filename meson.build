@@ -1,13 +1,4 @@
-#project('raylib-game', 'c', 'cpp')
-project('raylib-game', 'c')
-  #default_options: [
-    ## 'b_ndebug=false',
-
-    ## enable ASAN on clang
-    #'b_sanitize=address' ,
-    #'b_lundef=false',
-  #],
-#)
+project('raylib-game', 'c', default_options : ['c_std=gnu11'])
 
 my_extra_args = [
   '-Wall',
