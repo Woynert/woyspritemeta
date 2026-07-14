@@ -16,6 +16,3 @@
 !/raygui/raygui_implementation.c
 
 !/raylib-fix-GetWindowHandler.patch
-
-!/woycontainer/
-!/woycontainer/**
