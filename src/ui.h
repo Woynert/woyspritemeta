@@ -291,7 +291,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     V2i mouse = GetMousePositioni();
 
-    DrawRectangleReci(area, LIGHTGRAY);
+    DrawRectangleReci(area, DARKGRAY);
 
     if (ctx->spritesheet_list.size <= 0) { return; }
 
@@ -325,6 +325,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     BeginTextureMode(ctx->draw.aux_viewport);
     ClearBackground(BLANK);
+    DrawRectangleReci(final, LIGHTGRAY);
     DrawTextureScaled(texture, final);
     DrawRectangleLinesEx((Rect2i_to_Rect2(draw_area)).rect, 1, RED);
 
