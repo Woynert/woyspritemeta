@@ -334,7 +334,8 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
         // Draw current sprites.
         for (dyna_foreach(Sprite, i, ctx->sprites)) {
             Sprite *sprite = i.ref;
-            ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, YELLOW, 2);
+            Color color = Rect2i_is_out_of_bounds(sprite->rect, ctx->spritesheet_image_rect) ? RED : YELLOW;
+            ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, color, 2);
         }
 
         // Draw selected sprites.
