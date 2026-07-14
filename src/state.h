@@ -5,7 +5,7 @@
 #include "raylib.h"
 #include "zoompanel.h"
 #include "arena.h"
-#include "strbuf+arena_extra.h"
+#include "arena_extra.h"
 
 typedef struct Ctx Ctx;
 
@@ -81,7 +81,7 @@ typedef struct Ctx {
 
     Action_Dyna actions;
     Spritesheet_Dyna spritesheet_list;
-    V2i spritesheet_image_size;
+    Rect2i spritesheet_image_rect;
 
 
     // Sheeteditor widget.

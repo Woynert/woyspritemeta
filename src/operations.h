@@ -170,8 +170,9 @@ int open_image_as_spritesheet(Ctx *ctx) {
 
     // Save dimensions
 
-    ctx->spritesheet_image_size.x = ctx->spritesheet_list.items[0].texture.width;
-    ctx->spritesheet_image_size.y = ctx->spritesheet_list.items[0].texture.height;
+    ctx->spritesheet_image_rect.pos = v2ii(0);
+    ctx->spritesheet_image_rect.width = ctx->spritesheet_list.items[0].texture.width;
+    ctx->spritesheet_image_rect.height = ctx->spritesheet_list.items[0].texture.height;
 
     strview_t base = path;
     strview_t extension = { 0 };
@@ -287,6 +288,14 @@ void register_sprite(Ctx *ctx, Rect2i rect) {
         .frames = 1,
     };
     Sprite_Dyna_append(&ctx->sprites, sprite);
+}
+
+
+void remove_sprite(Ctx *ctx, int index) {
+    Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, index);
+    if (sprite == NULL) { return; }
+    strbuf_destroy(&sprite->name);
+    Sprite_Dyna_pop_at_preserve_order(&ctx->sprites, index, NULL);
 }
 
 
@@ -423,6 +432,34 @@ void editor_process_cursor_drag(Ctx *ctx) {
     }
 
     printfd("delta "V2i_Fmt, V2i_Arg(delta));
+}
+
+void editor_process_delete(Ctx *ctx) {
+    if (!IsKeyPressed(KEY_X)) { return; }
+    if (ctx->editor.cursor != SHEETEDITOR_CURSOR_TWEAK) { return; }
+    if (ctx->editor.selected_sprites.size <= 0) { return; }
+
+    int confirm_delete = tinyfd_messageBox("DELETE?", "Delete? No undo.", "yesno", "warning", 0);
+    if (confirm_delete == 0) { return; }
+
+    int_Dyna_sort(&ctx->editor.selected_sprites);
+
+    // Ensure ids are aligned.
+    int prev_id = INT_MIN;
+    for (dyna_foreach(int, sprite_id, ctx->editor.selected_sprites)) {
+        if (prev_id > *sprite_id.ref) {
+            printfd("ERR: Ids are not aligned."); return;
+        }
+        prev_id = *sprite_id.ref;
+    }
+
+    // Delete sprites
+    for (int i = ctx->editor.selected_sprites.size-1; i > -1; i -= 1) {
+        int sprite_id = ctx->editor.selected_sprites.items[i];
+        remove_sprite(ctx, sprite_id);
+    }
+
+    spritesheet_clear_selection(ctx);
 }
 
 

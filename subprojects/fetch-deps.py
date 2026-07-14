@@ -38,7 +38,7 @@ def apply_patch(directory: str, patch: str):
 fetch_dependency(
 "woycontainer",
 "https://github.com/woynert/woycontainer",
-"915c66252cd47fa4d6d5621e7f7fb050eabac99a")
+"00ec34a2024684566a93bf11da75801e36c78eee")
 
 fetch_dependency(
 "cwalk",
