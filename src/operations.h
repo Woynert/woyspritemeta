@@ -267,15 +267,6 @@ Font load_font_with_buncha_codepoints(const char* font_path, int font_size) {
 }
 
 
-bool Rect2i_is_out_of_bounds(Rect2i rect, Rect2i bounds) {
-    return (rect.x < bounds.x || rect.x >= bounds.width ||
-        rect.y < bounds.x || rect.y >= bounds.height ||
-        rect.x + rect.width > bounds.width ||
-        rect.y + rect.height > bounds.height
-    );
-}
-
-
 void register_sprite(Ctx *ctx, Rect2i rect) {
     if (Rect2i_is_out_of_bounds(rect, ctx->spritesheet_image_rect)) {
         return;

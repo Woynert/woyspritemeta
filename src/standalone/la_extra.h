@@ -13,4 +13,5 @@ V2f v2f_translate_scale(V2i point, V2i translate, float scale) {
 	);
 }
 
+
 #endif // !LA_EXTRA

@@ -336,6 +336,21 @@ Rect2i Rect2i_from_two_positions(V2i a, V2i b) {
     };
 }
 
+/*
+   @param Corner. Will be a corner.
+   @param Point. Will be point contained within the square.
+   */
+Rect2i Rect2i_make_square_from_a_corner_and_a_point(V2i corner, V2i point) {
+    Rect2i r;
+    r.width = corner.x > point.x ? corner.x - point.x : point.x - corner.x;
+    r.height = corner.y > point.y ? corner.y - point.y : point.y - corner.y;
+    if (r.width > r.height) { r.height = r.width; }
+    else { r.width = r.height; }
+    r.x = corner.x - (point.x < corner.x ? r.width : 0);
+    r.y = corner.y - (point.y < corner.y ? r.height : 0);
+    return r;
+}
+
 bool Rect2i_collides_Rect2i (Rect2i lhs, Rect2i rhs) {
     // (left -X, right +X, up -Y, down +Y)
     int left1   = lhs.pos.x;
@@ -363,6 +378,15 @@ bool Rect2i_collides_V2i (Rect2i rect, V2i point) {
     return ! (
         left > x || x > right ||
         top > y || y > bottom
+    );
+}
+
+
+bool Rect2i_is_out_of_bounds(Rect2i rect, Rect2i bounds) {
+    return (rect.x < bounds.x || rect.x >= bounds.width ||
+        rect.y < bounds.x || rect.y >= bounds.height ||
+        rect.x + rect.width > bounds.width ||
+        rect.y + rect.height > bounds.height
     );
 }
 

@@ -377,6 +377,12 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
         Rect2i selection = Rect2i_from_two_positions(
                 ctx->editor.selection_origin, mouse_pos_in_image);
+
+        // Shift to select a square.
+        if (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) {
+            selection = Rect2i_make_square_from_a_corner_and_a_point(ctx->editor.selection_origin, mouse_pos_in_image);
+        }
+
         selection.size = v2i_add(selection.size, v2ii(1));
 
         // Released.
