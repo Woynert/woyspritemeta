@@ -439,7 +439,13 @@ void editor_process_delete(Ctx *ctx) {
     if (ctx->editor.cursor != SHEETEDITOR_CURSOR_TWEAK) { return; }
     if (ctx->editor.selected_sprites.size <= 0) { return; }
 
-    int confirm_delete = tinyfd_messageBox("DELETE?", "Delete? No undo.", "yesno", "warning", 0);
+    // TODO: This dance is ugly... Modify strbuf_t struct?
+    Arena arena = ctx->frame_arena.arena;
+    strbuf_allocator_t arena_allocator = make_arena_strbuf_allocator(&arena);
+    strbuf_t *delete_msg = strbuf_create_empty(0, &arena_allocator);
+    strbuf_printf(&delete_msg, "Delete %d items? No uno.", ctx->editor.selected_sprites.size);
+
+    int confirm_delete = tinyfd_messageBox("DELETE?", delete_msg->cstr, "yesno", "warning", 0);
     if (confirm_delete == 0) { return; }
 
     int_Dyna_sort(&ctx->editor.selected_sprites);
