@@ -353,8 +353,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
     }
 
 
-
-    // Selection
+    // Draw selection.
 
     if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK
         || ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
@@ -362,33 +361,8 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
     ) {
         ctx->editor.mouse_inside = widget.focused && CheckCollisionPointReci(mouse, draw_area);
 
-        // Start selection.
-        if (!ctx->editor.is_selecting && ctx->editor.mouse_inside && BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
-            ctx->editor.is_selecting = true;
-            ctx->editor.selection_origin = ctx->editor.mouse_pos;
-        }
-
-        // Calculate selection.
-        {
-            ctx->editor.selection = Rect2i_from_two_positions(
-                    ctx->editor.selection_origin, ctx->editor.mouse_pos);
-
-            // Shift to select a square.
-            if (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) {
-                ctx->editor.selection = Rect2i_make_square_from_a_corner_and_a_point(
-                        ctx->editor.selection_origin, ctx->editor.mouse_pos);
-            }
-
-            ctx->editor.selection.size = v2i_add(ctx->editor.selection.size, v2ii(1));
-        }
-
-        // End selection.
-        if (ctx->editor.is_selecting && BetterMouse_is_released(MOUSE_BUTTON_LEFT)) {
-            ctx->editor.is_selecting = false;
-        }
-
         // Holding.
-        if (ctx->editor.is_selecting) {
+        if (ctx->editor.mouse_is_selecting) {
             Rect2i selection = ctx->editor.selection;
             ui__spritesheet_draw_scaled_rect_lines(
                 selection,

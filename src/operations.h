@@ -348,39 +348,53 @@ Sprite *try_get_first_selected_sprite(Ctx *ctx) {
 
 
 void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
-    // Requisites.
+    // Requisites to switch.
     switch (new_mode) {
-        case SHEETEDITOR_CURSOR_MOVE:
+        case SHEETEDITOR_CURSOR_DRAG:
         {
-            if (ctx->editor.selected_sprites.size <= 0) { return; }
+            if (ctx->editor.selected_sprites.size <= 0) {
+                new_mode = SHEETEDITOR_CURSOR_DEFAULT;
+            }
             break;
         }
         case SHEETEDITOR_CURSOR_RESIZE:
         {
-            if (ctx->editor.selected_sprites.size != 1) { return; }
+            if (ctx->editor.selected_sprites.size != 1) {
+                new_mode = SHEETEDITOR_CURSOR_DEFAULT;
+            }
             break;
         }
         case SHEETEDITOR_CURSOR_TWEAK:
         case SHEETEDITOR_CURSOR_ADD:
         case SHEETEDITOR_CURSOR__COUNT: { break; }
     }
-    // Cleanup.
+
+    // Cleanup old mode.
     switch (ctx->editor.cursor) {
         case SHEETEDITOR_CURSOR_TWEAK: { break; }
         case SHEETEDITOR_CURSOR_ADD: { break; }
-        case SHEETEDITOR_CURSOR_MOVE: { break; }
+        case SHEETEDITOR_CURSOR_DRAG: { break; }
         case SHEETEDITOR_CURSOR_RESIZE: { break; }
         case SHEETEDITOR_CURSOR__COUNT: { break; }
     }
-    // Setup.
-    switch (new_mode) {
+
+    // Reset state
+    ctx->editor.cursor = new_mode;
+    ctx->editor.selection_origin = (V2i) { 0 };
+    ctx->editor.mouse_is_selecting = false;
+    ctx->editor.selection = (Rect2i) { 0 };
+    ctx->editor.drag_origin = (V2i) { 0 };
+    ctx->editor.drag_prev_mouse_pos = (V2i) { 0 };
+
+    // Setup new mode.
+    switch (ctx->editor.cursor) {
         case SHEETEDITOR_CURSOR_TWEAK: { break; }
         case SHEETEDITOR_CURSOR_ADD:
         {
             spritesheet_clear_selection(ctx);
             break;
         }
-        case SHEETEDITOR_CURSOR_MOVE:
+        case SHEETEDITOR_CURSOR_DRAG:
         {
             ctx->editor.drag_prev_mouse_pos = ctx->editor.mouse_pos;
             ctx->editor.drag_origin = ctx->editor.mouse_pos;
@@ -390,29 +404,27 @@ void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
         {
             Sprite* sprite = try_get_first_selected_sprite(ctx);
             if (sprite == NULL) { return; }
-            ctx->editor.is_selecting = true;
+            ctx->editor.mouse_is_selecting = true;
             ctx->editor.selection_origin = sprite->rect.pos;
             break;
         }
         case SHEETEDITOR_CURSOR__COUNT: { break; }
     }
-    ctx->editor.cursor = new_mode;
 }
 
-/*
-   Called every frame.
-   Sometimes you get events like mouse pressed or released. To check hold try ctx->editor.is_selecting.
-   */
-void editor_process_cursor_logic(Ctx *ctx) {
-    bool pressed_inside = ctx->editor.mouse_inside && BetterMouse_is_pressed(MOUSE_BUTTON_LEFT);
-    bool released_inside = ctx->editor.mouse_inside && BetterMouse_is_released(MOUSE_BUTTON_LEFT);
+
+void editor_process_cursor_mode_logic(Ctx *ctx) {
+    bool mouse_pressed = BetterMouse_is_pressed(MOUSE_BUTTON_LEFT);
+    bool mouse_released = BetterMouse_is_released(MOUSE_BUTTON_LEFT);
+    bool pressed_inside = ctx->editor.mouse_inside && mouse_pressed;
+    bool released_inside = ctx->editor.mouse_inside && mouse_released;
     Rect2i selection = ctx->editor.selection;
 
     switch(ctx->editor.cursor) {
     case SHEETEDITOR_CURSOR_TWEAK:
     {
         if (IsKeyPressed(KEY_G)) {
-            spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_MOVE);
+            spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_DRAG);
             return;
         }
         if (IsKeyPressed(KEY_S)) {
@@ -424,7 +436,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
             bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
             if (!shift) { spritesheet_clear_selection(ctx); }
         }
-        if (ctx->editor.is_selecting) {
+        if (ctx->editor.mouse_is_selecting) {
             spritesheet_select_append(ctx, selection);
         }
         if (released_inside) {
@@ -438,7 +450,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
     }
     case SHEETEDITOR_CURSOR_ADD:
     {
-        if (!ctx->editor.is_selecting) { return; }
+        if (!ctx->editor.mouse_is_selecting) { return; }
         if (released_inside) {
             if (selection.width > 1 && selection.height > 1) {
                 register_sprite(ctx, selection);
@@ -446,7 +458,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
         }
         break;
     }
-    case SHEETEDITOR_CURSOR_MOVE:
+    case SHEETEDITOR_CURSOR_DRAG:
     {
 
         // Cancel.
@@ -456,7 +468,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
             return;
         }
         // Commit.
-        if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
+        if (pressed_inside) {
             spritesheet_reset_cursor_mode(ctx);
             return;
         }
@@ -488,7 +500,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
             Sprite* sprite = try_get_first_selected_sprite(ctx);
             if (sprite == NULL) { return; }
             sprite->rect = selection;
-
+            ctx->editor.mouse_is_selecting = false;
             spritesheet_reset_cursor_mode(ctx);
         }
         break;
@@ -497,8 +509,48 @@ void editor_process_cursor_logic(Ctx *ctx) {
 }
 
 
+void editor_process_cursor_logic(Ctx *ctx) {
+
+    // Start selection.
+    if (!ctx->editor.mouse_is_selecting && ctx->editor.mouse_inside
+        && BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)
+        && (
+            ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK
+            || ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
+        )
+    ) {
+        printfd("START SELECTION TRUE");
+        ctx->editor.mouse_is_selecting = true;
+        ctx->editor.selection_origin = ctx->editor.mouse_pos;
+    }
+
+    // Calculate selection.
+    {
+        ctx->editor.selection = Rect2i_from_two_positions(
+                ctx->editor.selection_origin, ctx->editor.mouse_pos);
+
+        // Shift to select a square.
+        if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+            ctx->editor.selection = Rect2i_make_square_from_a_corner_and_a_point(
+                    ctx->editor.selection_origin, ctx->editor.mouse_pos);
+        }
+
+        ctx->editor.selection.size = v2i_add(ctx->editor.selection.size, v2ii(1));
+    }
+
+    editor_process_cursor_mode_logic(ctx);
+
+    // End selection.
+    if (ctx->editor.mouse_is_selecting
+        && BetterMouse_is_released(MOUSE_BUTTON_LEFT)
+    ) {
+        ctx->editor.mouse_is_selecting = false;
+    }
+}
+
+
 void editor_cancel_drag(Ctx *ctx) {
-    if (ctx->editor.cursor != SHEETEDITOR_CURSOR_MOVE) { return; }
+    if (ctx->editor.cursor != SHEETEDITOR_CURSOR_DRAG) { return; }
     spritesheet_reset_cursor_mode(ctx);
 
     // Reset original positions.

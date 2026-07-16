@@ -69,10 +69,11 @@ typedef struct Draw {
 typedef enum SHEETEDITOR_CURSOR {
     SHEETEDITOR_CURSOR_TWEAK,
     SHEETEDITOR_CURSOR_ADD,
-    SHEETEDITOR_CURSOR_MOVE,
+    SHEETEDITOR_CURSOR_DRAG,
     SHEETEDITOR_CURSOR_RESIZE,
     SHEETEDITOR_CURSOR__COUNT,
 } SHEETEDITOR_CURSOR;
+#define SHEETEDITOR_CURSOR_DEFAULT SHEETEDITOR_CURSOR_TWEAK
 
 typedef struct Ctx {
     Draw draw;
@@ -88,19 +89,20 @@ typedef struct Ctx {
     // Sheeteditor widget.
     Zoompanel zoompanel;
     struct {
-        SHEETEDITOR_CURSOR cursor;
-        V2i selection_origin;
-        V2i mouse_pos; // @Note: Pixel position in spritesheet image.
+        int_Dyna selected_sprites;
+        int_Dyna selected_sprites_cursor;
 
-        bool is_selecting;
-        Rect2i selection;
+        SHEETEDITOR_CURSOR cursor;
+        V2i mouse_pos; // @Note: Pixel position in spritesheet image.
         bool mouse_inside;
 
-        int_Dyna selected_sprites_cursor;
-        int_Dyna selected_sprites;
-
+        // [ @Group: Will be reset on cursor change. ]
+        V2i selection_origin;
+        bool mouse_is_selecting;
+        Rect2i selection;
         V2i drag_prev_mouse_pos; // @Note: This also represents the latest commited drag endpoint.
         V2i drag_origin;
+        // [ @!Group ]
     } editor;
 
     Sprite_Dyna sprites;
