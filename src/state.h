@@ -107,7 +107,10 @@ typedef struct Ctx {
     } editor;
 
     Sprite_Dyna sprites;
-    int selected_sprite; // Used for previews.
+    //int selected_sprite; // Instead use int_Dyna_get_safe(selected_sprites, 0);
+    int preview_curr_frame;
+    int preview_update_timeout;
+    int preview_enable_animation; // Actually no. Sprites dictate their frames
 
     // [ Arenas ]
     struct {

@@ -309,6 +309,11 @@ void spritesheet_clear_selection(Ctx *ctx) {
     int_Dyna_clear_preserving(&ctx->editor.selected_sprites);
 }
 
+int *get_selected_sprite(Ctx *ctx) {
+    if (ctx->editor.selected_sprites.size != 1) { return NULL; }
+    return int_Dyna_get_safe(&ctx->editor.selected_sprites, 0);
+}
+
 void spritesheet_commit_selection(Ctx *ctx) {
     for (dyna_foreach(int, i, ctx->editor.selected_sprites_cursor)) {
         if (!int_Dyna_has(&ctx->editor.selected_sprites, *i.ref)) {

@@ -64,6 +64,34 @@ void ui_draw_text_outlined(Ctx *ctx, strview_t str, V2i pos, Color tint, int thi
     EndBlendMode();
 }
 
+bool ui__simple_button(const int id, Rect2i rect) {
+    static int pressed_was_on_btn_with_id = -1;
+    bool pressed = false;
+    bool hover_highlight = false;
+    bool held_highlight = false;
+    if (CheckCollisionPointReci(GetMousePositioni(), rect)) {
+        hover_highlight = true;
+        if (winput_mice_pressed(MouseLeft)) {
+            pressed_was_on_btn_with_id = id;
+            held_highlight = true;
+        }
+        if (pressed_was_on_btn_with_id == id) {
+            if (winput_mice_held(MouseLeft)) {
+                held_highlight = true;
+            }
+            if (winput_mice_released(MouseLeft)) {
+                pressed = true;
+            }
+        }
+    }
+    Color bg = held_highlight ? DARKBLUE : hover_highlight ? BLUE : LIGHTGRAY;
+    DrawRectangleReci(rect, bg);
+    DrawRectangleLinesi(rect, BLACK, 1);
+    return pressed;
+}
+
+#define ui_simple_button(rect) ui__simple_button(__COUNTER__,rect)
+
 void ui__spritesheet_draw_scaled_rect(Rect2i r, V2i translate, float scale, Color tint) {
     DrawRectangleRecf((Rect2) {
         .pos = v2f_translate_scale(r.pos, translate, scale),
@@ -191,6 +219,15 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
     Rect2i area = widget.area;
 
+    int selected_sprite = -1;
+    {
+        int *selected_sprite_ref = get_selected_sprite(ctx);
+        if (selected_sprite_ref != NULL) {
+            selected_sprite = *selected_sprite_ref;
+        }
+    }
+
+
     const int line_height = ctx->draw.line_height * 2;
     const int text_pad = 3;
     const int thumbnail_pad = 3;
@@ -218,12 +255,14 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
         bool highlight = false;
 
-        if (ctx->selected_sprite == i) { highlight = true; }
+        if (selected_sprite == i) { highlight = true; }
 
         if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
             highlight = true;
             if (winput_mice_pressed(MouseLeft)) {
-                ctx->selected_sprite = i;
+                // Select
+                spritesheet_clear_selection(ctx);
+                int_Dyna_append(&ctx->editor.selected_sprites, i);
             }
         }
 
@@ -248,37 +287,94 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
     UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
 
-    DrawRectangleReci(widget.area, DARKGRAY);
+    enum { PREVIEW_UPDATE_TIMEOUT_TICKS = 15 };
 
-    Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, ctx->selected_sprite);
+    int *selected_sprite_ref = get_selected_sprite(ctx);
+    if (selected_sprite_ref == NULL) { return; }
+    int selected_sprite = *selected_sprite_ref;
+
+    Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, selected_sprite);
     if (sprite == NULL) { return; }
 
-    Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, 0);
-    if (sheet == NULL) { return; }
-
-    const Texture texture = sheet->texture;
-    Rect2i transformed_sprite = {{ 0 }};
-    Rect2i area = Rect2i_add_padding_all(widget.area, 2);
-
-    int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
-    int scale_y = find_multiple_max_fit(sprite->rect.size.y, area.size.y);
-    if (scale_x <= 0 || scale_y <= 0) {
-        // Fallback to fraction scaling.
-        transformed_sprite.size = Rect_fit_in_Rect_and_preserve_aspect_ratio(area.size, sprite->rect.size);
-    } else {
-        // Pixel perfect scale.
-        transformed_sprite.size = v2i_mul(sprite->rect.size, v2ii(int_min(scale_x, scale_y)));
+    // Move current frame forward.
+    {
+        if (ctx->spritesheet_list.size > 0) {
+            if (ctx->preview_update_timeout == 0) {
+                ctx->preview_update_timeout = PREVIEW_UPDATE_TIMEOUT_TICKS;
+            }
+            --ctx->preview_update_timeout;
+            if (ctx->preview_update_timeout == 0) {
+                ++ctx->preview_curr_frame;
+                ctx->preview_curr_frame %= int_min(ctx->spritesheet_list.size, sprite->frames);
+            }
+        }
     }
 
-    // Center.
-    transformed_sprite.pos.x = area.x + ((area.width - transformed_sprite.width) / 2);
-    transformed_sprite.pos.y = area.y + ((area.height - transformed_sprite.height) / 2);
+    DrawRectangleReci(widget.area, DARKGRAY);
+    Rect2i area = widget.area;
 
-    BeginTextureMode(ctx->draw.aux_viewport);
-    DrawRectangleReci(area, DARKGRAY);
-    DrawTextureScaled2(texture, transformed_sprite, sprite->rect);
-    EndTextureMode();
-    DrawTextureRec_flipped(ctx->draw.aux_viewport.texture, area, area.pos, WHITE);
+    // Draw controls
+    {
+        Rect2i line_box = area;
+        line_box.height = ctx->draw.line_height;
+        line_box.y      = area.y + area.height - line_box.height;
+
+        Rect2i chunks[3];
+        Rect2i_split_horizontally(line_box, 3, chunks, { 1/2.f, 1/4.f });
+
+        Rect2i label_box       = chunks[0];
+        Rect2i frame_minus_box = chunks[1];
+        Rect2i frame_plus_box  = chunks[2];
+
+        DrawRectangleLinesi(label_box, BLACK, 1);
+        ui_draw_text(ctx, cstr(TextFormat("Frames %d", sprite->frames)), label_box.pos, DEFAULT_FG);
+
+        if (ui_simple_button(frame_minus_box)) {
+            if (sprite->frames > 1) {
+                --sprite->frames;
+            }
+        }
+        ui_draw_text(ctx, cstr_SL("-"), frame_minus_box.pos, DEFAULT_FG);
+
+        if (ui_simple_button(frame_plus_box)) {
+            if (sprite->frames < ctx->spritesheet_list.size) {
+                ++sprite->frames;
+            }
+        }
+        ui_draw_text(ctx, cstr_SL("+"), frame_plus_box.pos, DEFAULT_FG);
+    }
+
+    area.height -= ctx->draw.line_height * 2;
+    area = Rect2i_add_padding_all(area, 2);
+
+    // Draw sprite.
+    {
+        Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, ctx->preview_curr_frame);
+        if (sheet == NULL) { return; }
+
+        const Texture texture = sheet->texture;
+        Rect2i transformed_sprite = {{ 0 }};
+
+        int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
+        int scale_y = find_multiple_max_fit(sprite->rect.size.y, area.size.y);
+        if (scale_x <= 0 || scale_y <= 0) {
+            // Fallback to fraction scaling.
+            transformed_sprite.size = Rect_fit_in_Rect_and_preserve_aspect_ratio(area.size, sprite->rect.size);
+        } else {
+            // Pixel perfect scale.
+            transformed_sprite.size = v2i_mul(sprite->rect.size, v2ii(int_min(scale_x, scale_y)));
+        }
+        // Center.
+        transformed_sprite.pos.x = area.x + ((area.width - transformed_sprite.width) / 2);
+        transformed_sprite.pos.y = area.y + ((area.height - transformed_sprite.height) / 2);
+
+        BeginTextureMode(ctx->draw.aux_viewport);
+        DrawRectangleReci(area, DARKGRAY);
+        DrawTextureScaled2(texture, transformed_sprite, sprite->rect);
+        DrawTextureScaled2(texture, transformed_sprite, sprite->rect);
+        EndTextureMode();
+        DrawTextureRec_flipped(ctx->draw.aux_viewport.texture, area, area.pos, WHITE);
+    }
 }
 
 

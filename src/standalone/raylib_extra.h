@@ -37,6 +37,9 @@ typedef union Rect2i {
     };
 } Rect2i;
 
+#define Rect2i_Fmt "Rect2i(%d, %d, %d, %d)"
+#define Rect2i_Arg(r) r.x, r.y, r.width, r.height
+
 Rect2 Rect2i_to_Rect2(Rect2i r)
 { return (Rect2) {{ (float)r.x, (float)r.y, (float)r.width, (float)r.height }}; }
 
@@ -247,6 +250,12 @@ void DrawRectangleReci(Rect2i rect, Color color) {
         (Vector2){ 0.0f, 0.0f }, 0.0f, color);
 }
 
+void DrawRectangleLinesi(Rect2i rect, Color color, float thick) {
+    DrawRectangleLinesEx(
+        (Rectangle){ (float)rect.x, (float)rect.y, (float)rect.width, (float)rect.height },
+        thick, color);
+}
+
 void DrawRectangleRecf(Rect2 rect, Color color) {
     DrawRectanglePro(
         (Rectangle){ rect.x, rect.y, rect.width, rect.height },
@@ -428,16 +437,85 @@ void DrawCheckerboard(Rect2i rect, Color color, int square_length) {
 // @retval 0. Not found.
 int find_multiple_max_fit(int n, int cap) {
     if (n <= 0) return 0;
-    int value;
-    int multiple = 0;
-    for (;;) {
-        value = (multiple +1) * n;
-        if (value <= cap) {
-            ++multiple;
-        } else break;
-    }
-    return multiple;
+    if (cap <= 0) return 0;
+    return (int)floorf((float)cap / (float)n);
 }
+
+
+/* @Note: Use Rect2i_split_horizontally macro instead. */
+void Rect2i__split_horizontally(const Rect2i area, int chunk_count, Rect2i *out_chunks, float *fractions) {
+    Rect2i chunk = area;
+    chunk.width = 0;
+    for (int i = 0; i < chunk_count; ++i) {
+        chunk.width = (int)(fractions[i] * (float)area.width);
+        if (i == chunk_count -1) {
+            // On last iteration ensure we cover all original width.
+            chunk.width = area.x + area.width - chunk.x;
+        }
+        out_chunks[i] = chunk;
+        chunk.x += chunk.width;
+    }
+}
+
+/*
+   // Usage example:
+   Rect2i chunks[3];
+   Rect2i_split_horizontally(line_box, 3, chunks, { 0.1f, 0.2f });
+*/
+#define Rect2i_split_horizontally(area, chunk_count, out_chunks, ...)            \
+    do {                                                                         \
+        float __fractions[countof(chunks) -1] = __VA_ARGS__;                     \
+        wstatic_assert(countof(out_chunks) == (size_t)chunk_count);              \
+        Rect2i__split_horizontally(area, chunk_count, out_chunks, __fractions);  \
+    } while(0);
+
+/*
+typedef struct Rect2i_pair { Rect2i left; Rect2i right; } Rect2i_pair;
+
+Rect2i Rect2i_slice_horizontally_get_left(Rect2i src, float offset, float size) {
+    return (Rect2i) {
+        .x = src.x + (int)((float)src.width * offset),
+        .y = src.y,
+        .width = (int)((float)src.width * size),
+        .height = src.height
+    };
+}
+
+Rect2i_pair Rect2i_split_vertically_px(Rect2i src, int offset_px) {
+    return (Rect2i_pair) {
+        .left = {
+            .x = src.x,
+            .y = src.y,
+            .width = src.width,
+            .height = offset_px
+        },
+        .right = {
+            .x = src.x,
+            .y = src.y + offset_px,
+            .width = src.width,
+            .height = src.height - offset_px
+        },
+    };
+}
+
+Rect2i_pair Rect2i_split_horizontally_px(Rect2i src, int offset_px) {
+    return (Rect2i_pair) {
+        .left = {
+            .x = src.x,
+            .y = src.y,
+            .width = offset_px,
+            .height = src.height
+        },
+        .right = {
+            .x = src.x + offset_px,
+            .y = src.y,
+            .width = src.width - offset_px,
+            .height = src.height
+        },
+    };
+}
+*/
+
 
 
 #endif // !RAYLIB_EXTRA
