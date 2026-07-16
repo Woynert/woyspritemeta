@@ -319,7 +319,6 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     V2i panned_origin = v2i_add(draw_area.pos, ctx->zoompanel.offset_from_origin);
     V2i scaled_size = v2f_2i(v2f_mul(v2i_2f(texture_size), v2ff(ctx->zoompanel.zoom)));
-
     Rect2i final = (Rect2i){
         .pos = panned_origin,
         .size = scaled_size,
@@ -336,9 +335,9 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
     // Draw on screen.
 
     BeginTextureMode(ctx->draw.aux_viewport);
-    ClearBackground(BLANK);
     DrawRectangleReci(draw_area, DARKGRAY);
     DrawRectangleReci(final, DEFAULT_BG);
+    DrawCheckerboard(final, (Color){ 0, 0, 0, 10 }, (int)(((float)16 * ctx->zoompanel.zoom)));
     DrawTextureScaled(texture, final);
 
     {

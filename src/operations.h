@@ -549,7 +549,12 @@ void editor_process_cursor_logic(Ctx *ctx) {
                 ctx->editor.selection_origin, ctx->editor.mouse_pos);
 
         // Shift to select a square.
-        if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+        if ((IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT))
+            && (
+                ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
+                || ctx->editor.cursor == SHEETEDITOR_CURSOR_RESIZE
+            )
+        ) {
             ctx->editor.selection = Rect2i_make_square_from_a_corner_and_a_point(
                     ctx->editor.selection_origin, ctx->editor.mouse_pos);
         }
@@ -591,7 +596,7 @@ void editor_process_delete(Ctx *ctx) {
     Arena arena = ctx->frame_arena.arena;
     strbuf_allocator_t arena_allocator = make_arena_strbuf_allocator(&arena);
     strbuf_t *delete_msg = strbuf_create_empty(0, &arena_allocator);
-    strbuf_printf(&delete_msg, "Delete %d items? No uno.", ctx->editor.selected_sprites.size);
+    strbuf_printf(&delete_msg, "Delete %d items? No undo.", ctx->editor.selected_sprites.size);
 
     int confirm_delete = tinyfd_messageBox("DELETE?", delete_msg->cstr, "yesno", "warning", 0);
     if (confirm_delete == 0) { return; }

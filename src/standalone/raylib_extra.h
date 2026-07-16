@@ -393,5 +393,29 @@ bool Rect2i_is_out_of_bounds(Rect2i rect, Rect2i bounds) {
     );
 }
 
+void DrawCheckerboard(Rect2i rect, Color color, int square_length) {
+    int h_count = (int)ceilf(((float)rect.width / (float)square_length) / 2.f);
+    int v_count = (int)ceilf(((float)rect.height / (float)square_length));
+    int h_offset = 0;
+    int h_left;
+    int v_left = rect.height;
+
+    for (int j = 0; j < v_count; ++j) {
+        h_offset = !h_offset;
+        h_left = rect.width - h_offset *square_length;
+        for (int i = 0; i < h_count; ++i) {
+            DrawRectangleReci((Rect2i){{
+                rect.x + i * square_length *2 + h_offset * square_length,
+                rect.y + j * square_length,
+                int_min(square_length, h_left),
+                int_min(square_length, v_left),
+                }}, color
+            );
+            h_left -= square_length *2;
+        }
+        v_left -= square_length;
+    }
+}
+
 
 #endif // !RAYLIB_EXTRA
