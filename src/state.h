@@ -102,6 +102,7 @@ typedef struct Ctx {
         Rect2i selection;
         V2i drag_prev_mouse_pos; // @Note: This also represents the latest commited drag endpoint.
         V2i drag_origin;
+        bool add_can_undo;
         // [ @!Group ]
     } editor;
 

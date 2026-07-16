@@ -287,6 +287,11 @@ void remove_sprite(Ctx *ctx, int index) {
     if (sprite == NULL) { return; }
     strbuf_destroy(&sprite->name);
     Sprite_Dyna_pop_at_preserve_order(&ctx->sprites, index, NULL);
+
+    /*
+       @Note: Every time the ctx->sprites list is modified
+       ctx->editor.selected_sprites should be cleared.
+    */
 }
 
 
@@ -379,12 +384,13 @@ void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
     }
 
     // Reset state
-    ctx->editor.cursor = new_mode;
-    ctx->editor.selection_origin = (V2i) { 0 };
-    ctx->editor.mouse_is_selecting = false;
-    ctx->editor.selection = (Rect2i) { 0 };
-    ctx->editor.drag_origin = (V2i) { 0 };
+    ctx->editor.cursor              = new_mode;
+    ctx->editor.selection_origin    = (V2i) { 0 };
+    ctx->editor.mouse_is_selecting  = false;
+    ctx->editor.selection           = (Rect2i) { 0 };
+    ctx->editor.drag_origin         = (V2i) { 0 };
     ctx->editor.drag_prev_mouse_pos = (V2i) { 0 };
+    ctx->editor.add_can_undo        = false;
 
     // Setup new mode.
     switch (ctx->editor.cursor) {
@@ -416,6 +422,7 @@ void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
 void editor_process_cursor_mode_logic(Ctx *ctx) {
     bool mouse_pressed = winput_mice_pressed(MouseLeft);
     bool mouse_released = winput_mice_released(MouseLeft);
+    bool mouse_inside = ctx->editor.mouse_inside;
     bool pressed_inside = ctx->editor.mouse_inside && mouse_pressed;
     bool released_inside = ctx->editor.mouse_inside && mouse_released;
     Rect2i selection = ctx->editor.selection;
@@ -423,13 +430,15 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     switch(ctx->editor.cursor) {
     case SHEETEDITOR_CURSOR_TWEAK:
     {
-        if (IsKeyPressed(KEY_G)) {
-            spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_DRAG);
-            return;
-        }
-        if (IsKeyPressed(KEY_S)) {
-            spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_RESIZE);
-            return;
+        if (mouse_inside) {
+            if (IsKeyPressed(KEY_G)) {
+                spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_DRAG);
+                return;
+            }
+            if (IsKeyPressed(KEY_S)) {
+                spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_RESIZE);
+                return;
+            }
         }
 
         if (pressed_inside) {
@@ -450,10 +459,19 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     }
     case SHEETEDITOR_CURSOR_ADD:
     {
+        if (mouse_inside) {
+            // Delete last added sprite.
+            if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyDown(KEY_Z) && ctx->editor.add_can_undo) {
+                ctx->editor.add_can_undo = false;
+                remove_sprite(ctx, ctx->sprites.size -1);
+                spritesheet_clear_selection(ctx);
+            }
+        }
         if (!ctx->editor.mouse_is_selecting) { return; }
         if (released_inside) {
             if (selection.width > 1 && selection.height > 1) {
                 register_sprite(ctx, selection);
+                ctx->editor.add_can_undo = true;
             }
         }
         break;
@@ -467,6 +485,7 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
             spritesheet_reset_cursor_mode(ctx);
             return;
         }
+
         // Commit.
         if (pressed_inside) {
             spritesheet_reset_cursor_mode(ctx);
