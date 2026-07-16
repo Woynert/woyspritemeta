@@ -275,14 +275,10 @@ void DrawTextureScaled(Texture2D texture, Rect2i dest) {
     );
 }
 
-void DrawTextureScaled2(Texture2D texture, Rect2i dest, V2i source) {
+void DrawTextureScaled2(Texture2D texture, Rect2i dest, Rect2i source) {
     DrawTexturePro(
         texture,
-        (Rectangle) {
-            0, 0,
-            (float)source.x,
-            (float)source.y
-        },
+        (Rect2i_to_Rect2(source)).rect,
         (Rect2i_to_Rect2(dest)).rect,
         Vector2Zero(), 0, WHITE
     );
@@ -393,6 +389,16 @@ bool Rect2i_is_out_of_bounds(Rect2i rect, Rect2i bounds) {
     );
 }
 
+V2i Rect_fit_in_Rect_and_preserve_aspect_ratio(V2i container, V2i rect) {
+    float scale_x = (float)container.x / (float)rect.x;
+    float scale_y = (float)container.y / (float)rect.y;
+    float scale_factor = fminf(scale_x, scale_y);
+    return (V2i) {{
+        .x = (int)((float)rect.x * scale_factor),
+        .y = (int)((float)rect.y * scale_factor),
+    }};
+}
+
 void DrawCheckerboard(Rect2i rect, Color color, int square_length) {
     int h_count = (int)ceilf(((float)rect.width / (float)square_length) / 2.f);
     int v_count = (int)ceilf(((float)rect.height / (float)square_length));
@@ -415,6 +421,22 @@ void DrawCheckerboard(Rect2i rect, Color color, int square_length) {
         }
         v_left -= square_length;
     }
+}
+
+// Finds a multiple of a number which makes it less or equal to a cap.
+// @returns multiple.
+// @retval 0. Not found.
+int find_multiple_max_fit(int n, int cap) {
+    if (n <= 0) return 0;
+    int value;
+    int multiple = 0;
+    for (;;) {
+        value = (multiple +1) * n;
+        if (value <= cap) {
+            ++multiple;
+        } else break;
+    }
+    return multiple;
 }
 
 

@@ -107,6 +107,7 @@ typedef struct Ctx {
     } editor;
 
     Sprite_Dyna sprites;
+    int selected_sprite; // Used for previews.
 
     // [ Arenas ]
     struct {
@@ -175,9 +176,13 @@ typedef struct WidgetDraw {
 } WidgetDraw;
 
 typedef struct WidgetReq {
-    bool success;
-    bool request_focus_area;
+    bool   focus_area_request;
+    bool   focus_area_success;
     Rect2i focus_area;
+
+    bool   max_area_request;
+    bool   max_area_success;
+    Rect2i max_area;
 } WidgetReq;
 
 typedef struct Widget {

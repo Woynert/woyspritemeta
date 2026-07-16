@@ -9,11 +9,17 @@
 #include "winput.h"
 #include "rlgl.h"
 
-#define UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req) do {  \
-    if (req != NULL && req->request_focus_area) {     \
-        req->success = true;                          \
-        req->focus_area = widget.area;                \
-        return;                                       \
+#define UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req) do {            \
+    if (req != NULL) {                                             \
+        if (req->focus_area_request && !req->focus_area_success) { \
+            req->focus_area_success = true;                        \
+            req->focus_area = widget.area;                         \
+        }                                                          \
+        if (req->max_area_request && !req->max_area_success) {     \
+            req->max_area_success = true;                          \
+            req->max_area = widget.area;                           \
+        }                                                          \
+        return;                                                    \
     }} while (0)
 
 #define DEFAULT_BG LIGHTGRAY
@@ -86,7 +92,7 @@ void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, float scale
 
 void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
+    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
 
     Rect2i area = widget.area;
     const int line_height = ctx->draw.line_height;
@@ -125,7 +131,7 @@ void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
 void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
+    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
 
     Rect2i area = widget.area;
     const int line_height = ctx->draw.line_height * 2;
@@ -179,7 +185,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *re
 
 void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
+    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
 
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
 
@@ -210,9 +216,18 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
         thumbnail_area = Rect2i_add_padding_all(thumbnail_area, thumbnail_pad);
         text_offset = (V2i) {{ thumbnail_area.x + thumbnail_area.width + text_pad, item_area.y + text_pad }};
 
+        bool highlight = false;
+
+        if (ctx->selected_sprite == i) { highlight = true; }
+
         if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
-            DrawRectangleReci(item_area, BLUE);
+            highlight = true;
+            if (winput_mice_pressed(MouseLeft)) {
+                ctx->selected_sprite = i;
+            }
         }
+
+        if (highlight) { DrawRectangleReci(item_area, BLUE); }
 
         if (sprite->frames == 1) {
             strbuf_printf(&aux_str, "%"PRIstr" %dx%d offset %d,%d",
@@ -230,6 +245,43 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 }
 
 
+void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
+
+    DrawRectangleReci(widget.area, DARKGRAY);
+
+    Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, ctx->selected_sprite);
+    if (sprite == NULL) { return; }
+
+    Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, 0);
+    if (sheet == NULL) { return; }
+
+    const Texture texture = sheet->texture;
+    Rect2i transformed_sprite = {{ 0 }};
+    Rect2i area = Rect2i_add_padding_all(widget.area, 2);
+
+    int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
+    int scale_y = find_multiple_max_fit(sprite->rect.size.y, area.size.y);
+    if (scale_x <= 0 || scale_y <= 0) {
+        // Fallback to fraction scaling.
+        transformed_sprite.size = Rect_fit_in_Rect_and_preserve_aspect_ratio(area.size, sprite->rect.size);
+    } else {
+        // Pixel perfect scale.
+        transformed_sprite.size = v2i_mul(sprite->rect.size, v2ii(int_min(scale_x, scale_y)));
+    }
+
+    // Center.
+    transformed_sprite.pos.x = area.x + ((area.width - transformed_sprite.width) / 2);
+    transformed_sprite.pos.y = area.y + ((area.height - transformed_sprite.height) / 2);
+
+    BeginTextureMode(ctx->draw.aux_viewport);
+    DrawRectangleReci(area, DARKGRAY);
+    DrawTextureScaled2(texture, transformed_sprite, sprite->rect);
+    EndTextureMode();
+    DrawTextureRec_flipped(ctx->draw.aux_viewport.texture, area, area.pos, WHITE);
+}
+
+
 void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
     Rect2i area = widget.area;
@@ -243,12 +295,12 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 
     {
         // Report focusable area.
-        if (req != NULL && req->request_focus_area) {
-            req->success = true;
+        if (req != NULL && req->focus_area_request) {
+            req->focus_area_success = true;
             req->focus_area = btn_area;
             req->focus_area.height *= SHEETEDITOR_CURSOR__COUNT;
-            return;
         }
+        UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
     }
 
     SHEETEDITOR_CURSOR mode;
@@ -293,7 +345,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 }
 
 void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
-    UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
+    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
 
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
 
@@ -402,8 +454,8 @@ void ui_widget_spritesheet_hints(Ctx *ctx, const WidgetDraw widget, WidgetReq *r
     {
         // This widget is unfocusable.
         // Report back as having NO focus area at all.
-        if (req != NULL && req->request_focus_area) {
-            req->success = 1;
+        if (req != NULL && req->focus_area_request) {
+            req->focus_area_success = 1;
             req->focus_area = (Rect2i) { 0 };
             return;
         }
@@ -452,7 +504,7 @@ void ui_widget_spritesheet_hints(Ctx *ctx, const WidgetDraw widget, WidgetReq *r
 
 void ui_widget_spritesheet(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
+    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
 
     Widget widgets[] = {
         { .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_viewport, },
@@ -480,11 +532,11 @@ void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, int count) 
     for (int i = 0; i < count; ++i)
     {
         Widget *w = &widgets[i];
-        WidgetReq req = { .request_focus_area = true };
+        WidgetReq req = { .focus_area_request = true };
 
         (w->draw_function)(ctx, w->draw, &req);
 
-        if (req.success) {
+        if (req.focus_area_success) {
             w->focus_area = req.focus_area;
         } else {
             printfd("WAR: Widget %d didn't respond.", i);
@@ -513,13 +565,15 @@ void ui_draw_all(Ctx *ctx) {
         { .draw_function = ui_widget_options,          },
         { .draw_function = ui_widget_spritesheet_list, },
         { .draw_function = ui_widget_sprite_list,      },
+        { .draw_function = ui_widget_sprite_preview,   },
         { .draw_function = ui_widget_spritesheet,      },
     };
     int percentages[] = {
         10,
         15,
         15,
-        60
+        10,
+        50
     };
     wstatic_assert(countofi(widgets) == countofi(percentages));
 

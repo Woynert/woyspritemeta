@@ -42,8 +42,8 @@ int main(void) {
     Ctx ctx = { 0 };
     init_ctx(&ctx);
 
-    const int init_win_w = 1200;
-    const int init_win_h = 500;
+    int init_win_w = 1300;
+    int init_win_h = 800;
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(init_win_w, init_win_h, "woyspritemeta");
