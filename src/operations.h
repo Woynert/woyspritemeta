@@ -330,18 +330,38 @@ void spritesheet_select_toggle(Ctx *ctx, V2i point) {
     }
 }
 
+
+void editor_cancel_drag(Ctx *ctx);
+
+void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode);
+
+void spritesheet_reset_cursor_mode(Ctx *ctx) {
+    spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_TWEAK);
+}
+
+/// @retval NULL. Not found.
+Sprite *try_get_first_selected_sprite(Ctx *ctx) {
+    int* sprite_id = int_Dyna_get_safe(&ctx->editor.selected_sprites, 0);
+    if (sprite_id == NULL) { return NULL; }
+    return Sprite_Dyna_get_safe(&ctx->sprites, *sprite_id);
+}
+
+
 void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
     // Requisites.
     switch (new_mode) {
-        case SHEETEDITOR_CURSOR_TWEAK: { break; }
-        case SHEETEDITOR_CURSOR_ADD: { break; }
         case SHEETEDITOR_CURSOR_MOVE:
         {
-            if (ctx->editor.selected_sprites.size <= 0) {
-                return;
-            }
+            if (ctx->editor.selected_sprites.size <= 0) { return; }
             break;
         }
+        case SHEETEDITOR_CURSOR_RESIZE:
+        {
+            if (ctx->editor.selected_sprites.size != 1) { return; }
+            break;
+        }
+        case SHEETEDITOR_CURSOR_TWEAK:
+        case SHEETEDITOR_CURSOR_ADD:
         case SHEETEDITOR_CURSOR__COUNT: { break; }
     }
     // Cleanup.
@@ -349,11 +369,11 @@ void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
         case SHEETEDITOR_CURSOR_TWEAK: { break; }
         case SHEETEDITOR_CURSOR_ADD: { break; }
         case SHEETEDITOR_CURSOR_MOVE: { break; }
+        case SHEETEDITOR_CURSOR_RESIZE: { break; }
         case SHEETEDITOR_CURSOR__COUNT: { break; }
     }
-    ctx->editor.cursor = new_mode;
     // Setup.
-    switch (ctx->editor.cursor) {
+    switch (new_mode) {
         case SHEETEDITOR_CURSOR_TWEAK: { break; }
         case SHEETEDITOR_CURSOR_ADD:
         {
@@ -366,33 +386,116 @@ void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
             ctx->editor.drag_origin = ctx->editor.mouse_pos;
             break;
         }
+        case SHEETEDITOR_CURSOR_RESIZE:
+        {
+            Sprite* sprite = try_get_first_selected_sprite(ctx);
+            if (sprite == NULL) { return; }
+            ctx->editor.is_selecting = true;
+            ctx->editor.selection_origin = sprite->rect.pos;
+            break;
+        }
         case SHEETEDITOR_CURSOR__COUNT: { break; }
     }
+    ctx->editor.cursor = new_mode;
 }
 
-void spritesheet_reset_cursor_mode(Ctx *ctx) {
-    spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_TWEAK);
-}
+/*
+   Called every frame.
+   Sometimes you get events like mouse pressed or released. To check hold try ctx->editor.is_selecting.
+   */
+void editor_process_cursor_logic(Ctx *ctx) {
+    bool pressed_inside = ctx->editor.mouse_inside && BetterMouse_is_pressed(MOUSE_BUTTON_LEFT);
+    bool released_inside = ctx->editor.mouse_inside && BetterMouse_is_released(MOUSE_BUTTON_LEFT);
+    Rect2i selection = ctx->editor.selection;
 
-void editor_cancel_drag(Ctx *ctx);
+    switch(ctx->editor.cursor) {
+    case SHEETEDITOR_CURSOR_TWEAK:
+    {
+        if (IsKeyPressed(KEY_G)) {
+            spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_MOVE);
+            return;
+        }
+        if (IsKeyPressed(KEY_S)) {
+            spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_RESIZE);
+            return;
+        }
 
-void editor_process_keybinds(Ctx *ctx) {
+        if (pressed_inside) {
+            bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+            if (!shift) { spritesheet_clear_selection(ctx); }
+        }
+        if (ctx->editor.is_selecting) {
+            spritesheet_select_append(ctx, selection);
+        }
+        if (released_inside) {
+            if (v2i_eq(ctx->editor.selection_origin, ctx->editor.mouse_pos)) {
+                spritesheet_select_toggle(ctx, ctx->editor.mouse_pos);
+            } else {
+                spritesheet_commit_selection(ctx);
+            }
+        }
+        break;
+    }
+    case SHEETEDITOR_CURSOR_ADD:
+    {
+        if (!ctx->editor.is_selecting) { return; }
+        if (released_inside) {
+            if (selection.width > 1 && selection.height > 1) {
+                register_sprite(ctx, selection);
+            }
+        }
+        break;
+    }
+    case SHEETEDITOR_CURSOR_MOVE:
+    {
 
-	if (IsKeyPressed(KEY_G)) {
-        spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_MOVE);
-	}
-	if (ctx->editor.cursor == SHEETEDITOR_CURSOR_MOVE) {
         // Cancel.
         if (BetterMouse_is_pressed(MOUSE_BUTTON_RIGHT) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
             editor_cancel_drag(ctx);
             spritesheet_reset_cursor_mode(ctx);
+            return;
         }
         // Commit.
         if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
             spritesheet_reset_cursor_mode(ctx);
+            return;
         }
-	}
+
+        // Update transform on mouse move.
+        if (v2i_eq(ctx->editor.drag_prev_mouse_pos, ctx->editor.mouse_pos)) { return; }
+
+        V2i delta = v2i_sub(ctx->editor.mouse_pos, ctx->editor.drag_prev_mouse_pos);
+        ctx->editor.drag_prev_mouse_pos = ctx->editor.mouse_pos;
+
+        for (dyna_foreach(int, sprite_id, ctx->editor.selected_sprites)) {
+            Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, *sprite_id.ref);
+            if (sprite == NULL) {
+                printfd("ERR: Sprite not found."); continue;
+            }
+            sprite->offset = v2i_add(sprite->offset, delta);
+        }
+        break;
+    }
+    case SHEETEDITOR_CURSOR_RESIZE:
+    {
+        // Cancel.
+        if (IsKeyPressed(KEY_ESCAPE) || BetterMouse_is_pressed(MOUSE_BUTTON_RIGHT)) {
+            spritesheet_reset_cursor_mode(ctx);
+            return;
+        }
+        // Commit.
+        if (pressed_inside) {
+            Sprite* sprite = try_get_first_selected_sprite(ctx);
+            if (sprite == NULL) { return; }
+            sprite->rect = selection;
+
+            spritesheet_reset_cursor_mode(ctx);
+        }
+        break;
+    }
+    case SHEETEDITOR_CURSOR__COUNT: { break; } }
 }
+
 
 void editor_cancel_drag(Ctx *ctx) {
     if (ctx->editor.cursor != SHEETEDITOR_CURSOR_MOVE) { return; }
@@ -407,22 +510,6 @@ void editor_cancel_drag(Ctx *ctx) {
         if (sprite == NULL) { printfd("ERR: Sprite not found."); continue; }
         sprite->offset = v2i_add(sprite->offset, delta);
     }
-}
-
-void editor_process_cursor_drag(Ctx *ctx) {
-    if (ctx->editor.cursor != SHEETEDITOR_CURSOR_MOVE) { return; }
-    if (v2i_eq(ctx->editor.drag_prev_mouse_pos, ctx->editor.mouse_pos)) { return; }
-
-    V2i delta = v2i_sub(ctx->editor.mouse_pos, ctx->editor.drag_prev_mouse_pos);
-    ctx->editor.drag_prev_mouse_pos = ctx->editor.mouse_pos;
-
-    for (dyna_foreach(int, sprite_id, ctx->editor.selected_sprites)) {
-        Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, *sprite_id.ref);
-        if (sprite == NULL) { printfd("ERR: Sprite not found."); continue; }
-        sprite->offset = v2i_add(sprite->offset, delta);
-    }
-
-    printfd("delta "V2i_Fmt, V2i_Arg(delta));
 }
 
 void editor_process_delete(Ctx *ctx) {

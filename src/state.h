@@ -70,6 +70,7 @@ typedef enum SHEETEDITOR_CURSOR {
     SHEETEDITOR_CURSOR_TWEAK,
     SHEETEDITOR_CURSOR_ADD,
     SHEETEDITOR_CURSOR_MOVE,
+    SHEETEDITOR_CURSOR_RESIZE,
     SHEETEDITOR_CURSOR__COUNT,
 } SHEETEDITOR_CURSOR;
 
@@ -90,7 +91,10 @@ typedef struct Ctx {
         SHEETEDITOR_CURSOR cursor;
         V2i selection_origin;
         V2i mouse_pos; // @Note: Pixel position in spritesheet image.
+
         bool is_selecting;
+        Rect2i selection;
+        bool mouse_inside;
 
         int_Dyna selected_sprites_cursor;
         int_Dyna selected_sprites;

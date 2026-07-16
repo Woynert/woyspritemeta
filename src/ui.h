@@ -316,10 +316,9 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     float scale = ctx->zoompanel.zoom;
     V2i mouse_from_image_origin = v2i_sub(mouse, panned_origin);
-    V2i mouse_pos_in_image = v2f_2i(v2f_mul(
+    ctx->editor.mouse_pos = v2f_2i(v2f_mul(
         v2f_div(v2i_2f(mouse_from_image_origin), v2i_2f(scaled_size)),
         v2i_2f(texture_size)));
-    ctx->editor.mouse_pos = mouse_pos_in_image;
 
     // Draw on screen.
 
@@ -343,17 +342,13 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
             int sprite_id = *i.ref;
             Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
             if (sprite == NULL) { continue; }
-            if (ctx->editor.cursor == SHEETEDITOR_CURSOR_MOVE) {
-                ui__spritesheet_draw_scaled_rect_lines(sprite->rect, panned_origin, scale, BLUE, 1);
-            } else {
-                ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, BLUE, 2);
-            }
+            ui__spritesheet_draw_scaled_rect_lines(sprite->rect, panned_origin, scale, BLUE, 1);
         }
         for (dyna_foreach(int, i, ctx->editor.selected_sprites_cursor)) {
             int sprite_id = *i.ref;
             Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
             if (sprite == NULL) { continue; }
-            ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, scale, BLUE, 2);
+            ui__spritesheet_draw_scaled_rect_lines(sprite->rect, panned_origin, scale, BLUE, 1);
         }
     }
 
@@ -361,38 +356,40 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     // Selection
 
-    if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK ||
-        ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
+    if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK
+        || ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
+        || ctx->editor.cursor == SHEETEDITOR_CURSOR_RESIZE
     ) {
-        bool mouse_inside = widget.focused && CheckCollisionPointReci(mouse, draw_area);
-        bool pressed_inside = false;
-        bool released_inside = false;
+        ctx->editor.mouse_inside = widget.focused && CheckCollisionPointReci(mouse, draw_area);
 
-        // Pressed.
-        if (!ctx->editor.is_selecting && BetterMouse_is_pressed(MOUSE_BUTTON_LEFT) && mouse_inside) {
-            pressed_inside = true;
+        // Start selection.
+        if (!ctx->editor.is_selecting && ctx->editor.mouse_inside && BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
             ctx->editor.is_selecting = true;
-            ctx->editor.selection_origin = mouse_pos_in_image;
+            ctx->editor.selection_origin = ctx->editor.mouse_pos;
         }
 
-        Rect2i selection = Rect2i_from_two_positions(
-                ctx->editor.selection_origin, mouse_pos_in_image);
+        // Calculate selection.
+        {
+            ctx->editor.selection = Rect2i_from_two_positions(
+                    ctx->editor.selection_origin, ctx->editor.mouse_pos);
 
-        // Shift to select a square.
-        if (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) {
-            selection = Rect2i_make_square_from_a_corner_and_a_point(ctx->editor.selection_origin, mouse_pos_in_image);
+            // Shift to select a square.
+            if (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) {
+                ctx->editor.selection = Rect2i_make_square_from_a_corner_and_a_point(
+                        ctx->editor.selection_origin, ctx->editor.mouse_pos);
+            }
+
+            ctx->editor.selection.size = v2i_add(ctx->editor.selection.size, v2ii(1));
         }
 
-        selection.size = v2i_add(selection.size, v2ii(1));
-
-        // Released.
+        // End selection.
         if (ctx->editor.is_selecting && BetterMouse_is_released(MOUSE_BUTTON_LEFT)) {
             ctx->editor.is_selecting = false;
-            released_inside = true;
         }
 
         // Holding.
         if (ctx->editor.is_selecting) {
+            Rect2i selection = ctx->editor.selection;
             ui__spritesheet_draw_scaled_rect_lines(
                 selection,
                 panned_origin, scale, GREEN, 1);
@@ -403,36 +400,11 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
                 v2f_2i(v2f_translate_scale(v2i_add(selection.pos, v2ii(1)), panned_origin, scale)),
                 WHITE, BLACK);
         }
-
-        if (ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK) {
-            if (pressed_inside) {
-                bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-                if (!shift) { spritesheet_clear_selection(ctx); }
-            }
-            if (ctx->editor.is_selecting) {
-                spritesheet_select_append(ctx, selection);
-            }
-            if (released_inside) {
-                if (v2i_eq(ctx->editor.selection_origin, mouse_pos_in_image)) {
-                    spritesheet_select_toggle(ctx, mouse_pos_in_image);
-                } else {
-                    spritesheet_commit_selection(ctx);
-                }
-            }
-        }
-
-        else if (ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD) {
-            if (released_inside) {
-                if (selection.width > 1 && selection.height > 1) {
-                    register_sprite(ctx, selection);
-                }
-            }
-        }
     }
 
     // Draw cursor position scaled.
 
-    ui__spritesheet_draw_scaled_rect((Rect2i){.pos = mouse_pos_in_image, .size = v2ii(1)}, panned_origin, scale, GREEN);
+    ui__spritesheet_draw_scaled_rect((Rect2i){.pos = ctx->editor.mouse_pos, .size = v2ii(1)}, panned_origin, scale, GREEN);
 
     EndTextureMode();
 

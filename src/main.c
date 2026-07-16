@@ -67,8 +67,7 @@ int main(void) {
         ctx.frame_arena.arena = ArenaRoot_get_arena(ctx.frame_arena.root);
 
         ui_draw_all(&ctx);
-        editor_process_keybinds(&ctx);
-        editor_process_cursor_drag(&ctx);
+        editor_process_cursor_logic(&ctx);
         editor_process_delete(&ctx);
 
         quickmonitor_draw();
