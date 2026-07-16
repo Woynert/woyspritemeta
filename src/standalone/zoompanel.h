@@ -3,7 +3,7 @@
 
 #include "portable_utils.h"
 #include "raylib_extra.h"
-#include "better_mouse_input.h"
+#include "winput.h"
 
 
 enum ZOOMPANEL_CONF {
@@ -19,7 +19,7 @@ typedef struct Zoompanel {
     V2i offset_from_origin;
     float zoom; // Default 1: 1 -> 100%, 0.5 -> 50%, 2 -> 200%.
     enum ZOOMPANEL_CONF config;
-    MouseButton button;
+    WinputMice button;
 
     // Private
 
@@ -34,7 +34,7 @@ typedef struct Zoompanel {
 } Zoompanel;
 
 
-void zoompanel_init(Zoompanel *panel, enum ZOOMPANEL_CONF config, MouseButton button) {
+void zoompanel_init(Zoompanel *panel, enum ZOOMPANEL_CONF config, WinputMice button) {
     *panel = (Zoompanel) { 0 };
     panel->zoom = 1;
     panel->config = config;
@@ -46,7 +46,7 @@ void zoompanel__panning(Zoompanel *panel, Rect2i draw_area) {
     V2i mouse = GetMousePositioni();
 
     if (CheckCollisionPointReci(mouse, draw_area)) {
-        if (BetterMouse_is_pressed(panel->button)) {
+        if (winput_mice_pressed(panel->button)) {
             if (!panel->is_dragging) {
                 panel->is_dragging = true;
                 panel->drag_start = mouse;
@@ -54,7 +54,7 @@ void zoompanel__panning(Zoompanel *panel, Rect2i draw_area) {
             }
         }
     }
-    if (BetterMouse_is_released(panel->button)) {
+    if (winput_mice_released(panel->button)) {
         panel->is_dragging = false;
     }
 
@@ -77,8 +77,8 @@ void zoompanel__zooming(Zoompanel *panel, Rect2i draw_area) {
     V2i mouse = GetMousePositioni();
 
     if (!CheckCollisionPointReci(mouse, draw_area)) { return; }
-    if (BetterMouse_mouse_wheel() == 0) { return; }
-    if (BetterMouse_mouse_wheel() > 0) {
+    if (winput_wheel() == 0) { return; }
+    if (winput_wheel() > 0) {
         ++panel->zoom_level;
     } else {
         --panel->zoom_level;

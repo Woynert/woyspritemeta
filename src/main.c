@@ -2,7 +2,7 @@
 #include "portable_utils.h"
 #include "raylib.h"
 #include "GLFW/glfw3.h"
-#include "better_mouse_input.h"
+#include "winput.h"
 #include "state.h"
 #include "tinyfiledialogs.h"
 #include "ui.h"
@@ -12,11 +12,11 @@
 #include "la.h"
 
 void glfw_mouse_callback(GLFWwindow* w, int button, int action, int mods) {
-    BetterMouse_glfw_mouse_button_callback(w, button, action, mods);
+    winput_glfw_mouse_button_callback(w, button, action, mods);
 }
 
 void glfw_scroll_callback(GLFWwindow* w, double xoffset, double yoffset) {
-    BetterMouse_glfw_scroll_callback(w, xoffset, yoffset);
+    winput_glfw_scroll_callback(w, xoffset, yoffset);
 }
 
 void hook_glfw_callbacks(Ctx *ctx) {
@@ -76,7 +76,7 @@ int main(void) {
         ptrdiff_t total = (ptrdiff_t)(ctx.frame_arena.root.end - ctx.frame_arena.root.beg);
         quickmonitor_line("frame_arena %td/%td (%.3f%%)", used, total, ((float)used/(float)total)*100.0);
 
-        BetterMouse_consume_all();
+        winput_consume_all();
         EndDrawing();
     }
 

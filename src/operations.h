@@ -54,7 +54,7 @@ void _setup_ctx(Ctx *ctx) {
     strbuf_assign(&action.name, cstr_SL("Load image as spritesheet"));
     Action_Dyna_append(&ctx->actions, action);
 
-    zoompanel_init(&ctx->zoompanel, ZOOMPANEL_CONF_PIXEL_PERFECT, MOUSE_BUTTON_RIGHT);
+    zoompanel_init(&ctx->zoompanel, ZOOMPANEL_CONF_PIXEL_PERFECT, MouseRight);
 }
 
 void ctx_load_assets(Ctx *ctx) {
@@ -414,8 +414,8 @@ void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
 
 
 void editor_process_cursor_mode_logic(Ctx *ctx) {
-    bool mouse_pressed = BetterMouse_is_pressed(MOUSE_BUTTON_LEFT);
-    bool mouse_released = BetterMouse_is_released(MOUSE_BUTTON_LEFT);
+    bool mouse_pressed = winput_mice_pressed(MouseLeft);
+    bool mouse_released = winput_mice_released(MouseLeft);
     bool pressed_inside = ctx->editor.mouse_inside && mouse_pressed;
     bool released_inside = ctx->editor.mouse_inside && mouse_released;
     Rect2i selection = ctx->editor.selection;
@@ -462,7 +462,7 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     {
 
         // Cancel.
-        if (BetterMouse_is_pressed(MOUSE_BUTTON_RIGHT) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
+        if (winput_mice_pressed(MouseRight) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
             editor_cancel_drag(ctx);
             spritesheet_reset_cursor_mode(ctx);
             return;
@@ -491,7 +491,7 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     case SHEETEDITOR_CURSOR_RESIZE:
     {
         // Cancel.
-        if (IsKeyPressed(KEY_ESCAPE) || BetterMouse_is_pressed(MOUSE_BUTTON_RIGHT)) {
+        if (IsKeyPressed(KEY_ESCAPE) || winput_mice_pressed(MouseRight)) {
             spritesheet_reset_cursor_mode(ctx);
             return;
         }
@@ -513,7 +513,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
 
     // Start selection.
     if (!ctx->editor.mouse_is_selecting && ctx->editor.mouse_inside
-        && BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)
+        && winput_mice_pressed(MouseLeft)
         && (
             ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK
             || ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
@@ -542,7 +542,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
 
     // End selection.
     if (ctx->editor.mouse_is_selecting
-        && BetterMouse_is_released(MOUSE_BUTTON_LEFT)
+        && winput_mice_released(MouseLeft)
     ) {
         ctx->editor.mouse_is_selecting = false;
     }

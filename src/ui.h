@@ -6,7 +6,7 @@
 #include "la_extra.h"
 #include "raylib.h"
 #include "la.h"
-#include "better_mouse_input.h"
+#include "winput.h"
 #include "rlgl.h"
 
 #define UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req) do {  \
@@ -108,7 +108,7 @@ void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
         if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), line_area)) {
             DrawRectangleReci(line_area, BLUE);
 
-            if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
+            if (winput_mice_pressed(MouseLeft)) {
                 call_action(ctx, action);
             }
         }
@@ -153,7 +153,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *re
         if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
             DrawRectangleReci(item_area, BLUE);
 
-            if (BetterMouse_is_held(MOUSE_BUTTON_LEFT)) {
+            if (winput_mice_held(MouseLeft)) {
                 show_preview = true;
                 preview_texture = sheet->texture;
             }
@@ -272,7 +272,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
         DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
 
         if (widget.focused && CheckCollisionPointReci(mouse, btn_area)) {
-            if (BetterMouse_is_pressed(MOUSE_BUTTON_LEFT)) {
+            if (winput_mice_pressed(MouseLeft)) {
                 spritesheet_try_set_cursor_mode(ctx, mode);
             }
         }
