@@ -74,11 +74,34 @@ void winput_glfw_mouse_button_callback(GLFWwindow* w, int button, int action, in
     if (action == GLFW_PRESS) {
         winput__state.button[local_button].pressed = true;
         winput__state.button[local_button].held = true;
+        if (winput__state.button[local_button].ignore_next_release) {
+            winput__state.button[local_button].ignore_next_release = false;
+        }
     } else if (action == GLFW_RELEASE) {
         if (winput__state.button[local_button].ignore_next_release) {
             winput__state.button[local_button].ignore_next_release = false;
         } else {
             winput__state.button[local_button].released = true;
+        }
+    }
+}
+
+
+void winput_sync_frame(WinputFrame *frame) {
+    frame->wheel_x = winput__state.wheel_x;
+    frame->wheel_y = winput__state.wheel_y;
+    for (int i = MouseLeft; i <= MouseMiddle; ++i) {
+        frame->button[i].pressed  = winput__state.button[i].pressed;
+        if (frame->button[i].pressed && frame->button[i].ignore_next_release) {
+            frame->button[i].ignore_next_release = false; // TODO: Add a test case for this.
+        }
+        if (!frame->button[i].ignore_next_release) {
+            frame->button[i].held = winput__state.button[i].held;
+        }
+        frame->button[i].released = winput__state.button[i].released;
+        if (frame->button[i].released && frame->button[i].ignore_next_release) {
+            frame->button[i].ignore_next_release = false;
+            frame->button[i].released = false;
         }
     }
 }
@@ -91,21 +114,6 @@ void winput_glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoff
 }
 
 
-void winput_sync_frame(WinputFrame *frame) {
-    frame->wheel_x = winput__state.wheel_x;
-    frame->wheel_y = winput__state.wheel_y;
-    for (int i = MouseLeft; i <= MouseMiddle; ++i) {
-        frame->button[i].pressed  = winput__state.button[i].pressed;
-        if (!frame->button[i].ignore_next_release) {
-            frame->button[i].held = winput__state.button[i].held;
-        }
-        frame->button[i].released = winput__state.button[i].released;
-        if (frame->button[i].released && frame->button[i].ignore_next_release) {
-            frame->button[i].ignore_next_release = false;
-            frame->button[i].released = false;
-        }
-    }
-}
 
 
 /* Call at frame end. */
