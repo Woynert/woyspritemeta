@@ -551,7 +551,6 @@ void editor_process_cursor_logic(Ctx *ctx) {
 
 void editor_cancel_drag(Ctx *ctx) {
     if (ctx->editor.cursor != SHEETEDITOR_CURSOR_DRAG) { return; }
-    spritesheet_reset_cursor_mode(ctx);
 
     // Reset original positions.
 
