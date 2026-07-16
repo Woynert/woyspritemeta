@@ -77,6 +77,7 @@ typedef enum SHEETEDITOR_CURSOR {
 
 typedef struct Ctx {
     Draw draw;
+    int ticks; // Frame counter since engine start.
 
     bool has_project_file_open;
     strbuf_t *curr_project_file_path;
@@ -108,9 +109,6 @@ typedef struct Ctx {
 
     Sprite_Dyna sprites;
     //int selected_sprite; // Instead use int_Dyna_get_safe(selected_sprites, 0);
-    int preview_curr_frame;
-    int preview_update_timeout;
-    int preview_enable_animation; // Actually no. Sprites dictate their frames
 
     // [ Arenas ]
     struct {

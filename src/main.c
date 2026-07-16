@@ -58,6 +58,7 @@ int main(void) {
 
     while(!WindowShouldClose())
     {
+        ++ctx.ticks;
         process_quit_key_combo();
 
         BeginDrawing();

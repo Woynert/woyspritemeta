@@ -24,6 +24,7 @@
 
 #define DEFAULT_BG LIGHTGRAY
 #define DEFAULT_FG BLACK
+#define ANIMATION_TICKS_PER_FRAME 15
 
 
 
@@ -91,6 +92,38 @@ bool ui__simple_button(const int id, Rect2i rect) {
 }
 
 #define ui_simple_button(rect) ui__simple_button(__COUNTER__,rect)
+
+
+/*
+   @Note: Draws sprite correctly scaled into container.
+   @Returns final calculated transform.
+*/
+Rect2i ui_draw_sprite(Ctx *ctx, Sprite *sprite, Rect2i area) {
+    int frame = (ctx->ticks % (sprite->frames * ANIMATION_TICKS_PER_FRAME)) / ANIMATION_TICKS_PER_FRAME;
+    Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, frame);
+    if (sheet == NULL) {
+        return (Rect2i) { 0 };
+    }
+
+    Rect2i final = {{ 0 }};
+
+    int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
+    int scale_y = find_multiple_max_fit(sprite->rect.size.y, area.size.y);
+    if (scale_x <= 0 || scale_y <= 0) {
+        // Fallback to fraction scaling.
+        final.size = Rect_fit_in_Rect_and_preserve_aspect_ratio(area.size, sprite->rect.size);
+    } else {
+        // Pixel perfect scale.
+        final.size = v2i_mul(sprite->rect.size, v2ii(int_min(scale_x, scale_y)));
+    }
+    // Center.
+    final.pos.x = area.x + ((area.width - final.width) / 2);
+    final.pos.y = area.y + ((area.height - final.height) / 2);
+
+    DrawTextureScaled2(sheet->texture, final, sprite->rect);
+    return final;
+}
+
 
 void ui__spritesheet_draw_scaled_rect(Rect2i r, V2i translate, float scale, Color tint) {
     DrawRectangleRecf((Rect2) {
@@ -227,7 +260,6 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
         }
     }
 
-
     const int line_height = ctx->draw.line_height * 2;
     const int text_pad = 3;
     const int thumbnail_pad = 3;
@@ -235,9 +267,6 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
     Rect2i item_area;
     Rect2i thumbnail_area;
     V2i text_offset;
-
-    //bool show_preview = false;
-    //Texture preview_texture = { 0 };
 
     DrawRectangleReci(area, DEFAULT_BG);
     ui_draw_text(ctx, cstr_SL("Sprites:"), area.pos, DEFAULT_FG);
@@ -280,14 +309,17 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
             );
         }
         ui_draw_text(ctx, strbuf_view2(aux_str), text_offset, DEFAULT_FG);
+
+        // Draw texture.
+
+        DrawRectangleLinesi(Rect2i_add_padding_all(thumbnail_area, -1), BLACK, 1);
+        ui_draw_sprite(ctx, sprite, thumbnail_area);
     }
 }
 
 
 void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
     UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
-
-    enum { PREVIEW_UPDATE_TIMEOUT_TICKS = 15 };
 
     int *selected_sprite_ref = get_selected_sprite(ctx);
     if (selected_sprite_ref == NULL) { return; }
@@ -296,19 +328,7 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
     Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, selected_sprite);
     if (sprite == NULL) { return; }
 
-    // Move current frame forward.
-    {
-        if (ctx->spritesheet_list.size > 0) {
-            if (ctx->preview_update_timeout == 0) {
-                ctx->preview_update_timeout = PREVIEW_UPDATE_TIMEOUT_TICKS;
-            }
-            --ctx->preview_update_timeout;
-            if (ctx->preview_update_timeout == 0) {
-                ++ctx->preview_curr_frame;
-                ctx->preview_curr_frame %= int_min(ctx->spritesheet_list.size, sprite->frames);
-            }
-        }
-    }
+    // Calculate current frame.
 
     DrawRectangleReci(widget.area, DARKGRAY);
     Rect2i area = widget.area;
@@ -326,8 +346,9 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
         Rect2i frame_minus_box = chunks[1];
         Rect2i frame_plus_box  = chunks[2];
 
-        DrawRectangleLinesi(label_box, BLACK, 1);
+        DrawRectangleLinesi(line_box, DEFAULT_BG, 1);
         ui_draw_text(ctx, cstr(TextFormat("Frames %d", sprite->frames)), label_box.pos, DEFAULT_FG);
+        DrawRectangleLinesi(label_box, BLACK, 1);
 
         if (ui_simple_button(frame_minus_box)) {
             if (sprite->frames > 1) {
@@ -349,29 +370,9 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
 
     // Draw sprite.
     {
-        Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, ctx->preview_curr_frame);
-        if (sheet == NULL) { return; }
-
-        const Texture texture = sheet->texture;
-        Rect2i transformed_sprite = {{ 0 }};
-
-        int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
-        int scale_y = find_multiple_max_fit(sprite->rect.size.y, area.size.y);
-        if (scale_x <= 0 || scale_y <= 0) {
-            // Fallback to fraction scaling.
-            transformed_sprite.size = Rect_fit_in_Rect_and_preserve_aspect_ratio(area.size, sprite->rect.size);
-        } else {
-            // Pixel perfect scale.
-            transformed_sprite.size = v2i_mul(sprite->rect.size, v2ii(int_min(scale_x, scale_y)));
-        }
-        // Center.
-        transformed_sprite.pos.x = area.x + ((area.width - transformed_sprite.width) / 2);
-        transformed_sprite.pos.y = area.y + ((area.height - transformed_sprite.height) / 2);
-
         BeginTextureMode(ctx->draw.aux_viewport);
         DrawRectangleReci(area, DARKGRAY);
-        DrawTextureScaled2(texture, transformed_sprite, sprite->rect);
-        DrawTextureScaled2(texture, transformed_sprite, sprite->rect);
+        ui_draw_sprite(ctx, sprite, area);
         EndTextureMode();
         DrawTextureRec_flipped(ctx->draw.aux_viewport.texture, area, area.pos, WHITE);
     }
