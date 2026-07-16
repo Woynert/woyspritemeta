@@ -110,6 +110,13 @@ void zoompanel__zooming(Zoompanel *panel, Rect2i draw_area) {
 }
 
 
+void zoompanel_reset_zoom_and_pan(Zoompanel *panel) {
+    panel->zoom = 1;
+    panel->zoom_level = 1;
+    panel->offset_from_origin = (V2i) {0};
+}
+
+
 void zoompanel_process(Zoompanel *panel, V2i texture_size, Rect2i draw_area) {
     panel->original_size = texture_size;
     zoompanel__panning(panel, draw_area);

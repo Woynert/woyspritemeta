@@ -16,6 +16,9 @@
         return;                                       \
     }} while (0)
 
+#define DEFAULT_BG LIGHTGRAY
+#define DEFAULT_FG BLACK
+
 
 
 int ui__calculate_focus(const Widget_view widgets);
@@ -97,8 +100,8 @@ void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
     Rect2i line_area = {{ pos.x, pos.y, area.width -pad, line_height }};
     line_area.y += line_height;
 
-    DrawRectangleReci(area, LIGHTGRAY);
-    ui_draw_text(ctx, cstr_SL("Options:"), pos, BLACK);
+    DrawRectangleReci(area, DEFAULT_BG);
+    ui_draw_text(ctx, cstr_SL("Options:"), pos, DEFAULT_FG);
 
     for (int i = 0; i < ctx->actions.size; ++i)
     {
@@ -113,7 +116,7 @@ void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
             }
         }
 
-        ui_draw_text(ctx, strbuf_view2(action->name), pos, BLACK);
+        ui_draw_text(ctx, strbuf_view2(action->name), pos, DEFAULT_FG);
 
         ++line;
         line_area.y += line_height;
@@ -136,8 +139,8 @@ void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *re
     bool show_preview = false;
     Texture preview_texture = { 0 };
 
-    DrawRectangleReci(area, LIGHTGRAY);
-    ui_draw_text(ctx, cstr_SL("Spritesheets:"), area.pos, BLACK);
+    DrawRectangleReci(area, DEFAULT_BG);
+    ui_draw_text(ctx, cstr_SL("Spritesheets:"), area.pos, DEFAULT_FG);
     area.y += ctx->draw.line_height;
 
     for (int i = 0; i < ctx->spritesheet_list.size; ++i)
@@ -159,17 +162,17 @@ void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *re
             }
         }
 
-        ui_draw_text(ctx, strbuf_view2(sheet->path), text_offset, BLACK);
+        ui_draw_text(ctx, strbuf_view2(sheet->path), text_offset, DEFAULT_FG);
 
         DrawRectangleReci(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
-        DrawRectangleReci(thumbnail_area, LIGHTGRAY);
+        DrawRectangleReci(thumbnail_area, DEFAULT_BG);
         DrawTextureScaled(sheet->texture, thumbnail_area);
     }
 
     if (show_preview) {
         Rect2i preview_area = { .pos = GetMousePositioni(), .size = {{ preview_texture.width, preview_texture.height }} };
         DrawRectangleReci(Rect2i_add_padding_all(preview_area, -1), BLACK);
-        DrawRectangleReci(preview_area, LIGHTGRAY);
+        DrawRectangleReci(preview_area, DEFAULT_BG);
         DrawTextureScaled(preview_texture, preview_area);
     }
 }
@@ -193,8 +196,8 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
     //bool show_preview = false;
     //Texture preview_texture = { 0 };
 
-    DrawRectangleReci(area, LIGHTGRAY);
-    ui_draw_text(ctx, cstr_SL("Sprites:"), area.pos, BLACK);
+    DrawRectangleReci(area, DEFAULT_BG);
+    ui_draw_text(ctx, cstr_SL("Sprites:"), area.pos, DEFAULT_FG);
     area.y += ctx->draw.line_height;
 
     for (int i = 0; i < ctx->sprites.size; ++i)
@@ -209,11 +212,6 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
         if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
             DrawRectangleReci(item_area, BLUE);
-
-            //if (BetterMouse_is_held(MOUSE_BUTTON_LEFT)) {
-                //show_preview = true;
-                //preview_texture = sheet->texture;
-            //}
         }
 
         if (sprite->frames == 1) {
@@ -227,19 +225,8 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
                 sprite->size.x, sprite->size.y, sprite->offset.x, sprite->offset.y
             );
         }
-        ui_draw_text(ctx, strbuf_view2(aux_str), text_offset, BLACK);
-
-        //DrawRectangleReci(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
-        //DrawRectangleReci(thumbnail_area, LIGHTGRAY);
-        //DrawTextureScaled(sheet->texture, thumbnail_area);
+        ui_draw_text(ctx, strbuf_view2(aux_str), text_offset, DEFAULT_FG);
     }
-
-    //if (show_preview) {
-        //Rect2i preview_area = { .pos = GetMousePositioni(), .size = {{ preview_texture.width, preview_texture.height }} };
-        //DrawRectangleReci(Rect2i_add_padding_all(preview_area, -1), BLACK);
-        //DrawRectangleReci(preview_area, LIGHTGRAY);
-        //DrawTextureScaled(preview_texture, preview_area);
-    //}
 }
 
 
@@ -264,21 +251,45 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
         }
     }
 
-    for (int i = 0; i < SHEETEDITOR_CURSOR__COUNT; ++i) {
-        SHEETEDITOR_CURSOR mode = (SHEETEDITOR_CURSOR)i;
-        Color bg_color = ctx->editor.cursor == mode ? BLUE : LIGHTGRAY;
-        
-        DrawRectangleReci(btn_area, BLACK);
-        DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
+    SHEETEDITOR_CURSOR mode;
+    bool pressed;
+    Color bg_color;
 
-        if (widget.focused && CheckCollisionPointReci(mouse, btn_area)) {
-            if (winput_mice_pressed(MouseLeft)) {
-                spritesheet_try_set_cursor_mode(ctx, mode);
-            }
-        }
-
-        btn_area.y += btn_area.height;
+    // Tweak cursor. (DEFAULT)
+    mode = SHEETEDITOR_CURSOR_TWEAK;
+    pressed = winput_mice_pressed(MouseLeft) && widget.focused && CheckCollisionPointReci(mouse, btn_area);
+    bg_color = pressed ? DARKBLUE : ctx->editor.cursor == mode ? BLUE : DEFAULT_BG;
+    DrawRectangleReci(btn_area, BLACK);
+    DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
+    ui_draw_text(ctx, cstr_SL("Tweak"), btn_area.pos, DEFAULT_FG);
+    if (pressed) {
+        spritesheet_try_set_cursor_mode(ctx, mode);
     }
+    btn_area.y += btn_area.height;
+
+    // Add cursor.
+    mode = SHEETEDITOR_CURSOR_ADD;
+    pressed = winput_mice_pressed(MouseLeft) && widget.focused && CheckCollisionPointReci(mouse, btn_area);
+    bg_color = pressed ? DARKBLUE : ctx->editor.cursor == mode ? BLUE : DEFAULT_BG;
+    DrawRectangleReci(btn_area, BLACK);
+    DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
+    ui_draw_text(ctx, cstr_SL("Add"), btn_area.pos, DEFAULT_FG);
+    if (pressed) {
+        spritesheet_try_set_cursor_mode(ctx, mode);
+    }
+    btn_area.y += btn_area.height;
+
+    // Reset zoom and pan button.
+    bg_color = DEFAULT_BG;
+    pressed = winput_mice_pressed(MouseLeft) && widget.focused && CheckCollisionPointReci(mouse, btn_area);
+    bg_color = pressed ? DARKBLUE : DEFAULT_BG;
+    DrawRectangleReci(btn_area, BLACK);
+    DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
+    ui_draw_text(ctx, cstr_SL("Reset\nZoom"), btn_area.pos, DEFAULT_FG);
+    if (pressed) {
+        zoompanel_reset_zoom_and_pan(&ctx->zoompanel);
+    }
+    btn_area.y += btn_area.height;
 }
 
 void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
@@ -291,15 +302,14 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     V2i mouse = GetMousePositioni();
 
-    DrawRectangleReci(area, DARKGRAY);
-
     if (ctx->spritesheet_list.size <= 0) { return; }
 
     // Spritesheet viewport ↓↓↓
 
     const Texture texture = ctx->spritesheet_list.items[0].texture;
 
-    Rect2i draw_area = Rect2i_add_padding_all(area, 10);
+    //Rect2i draw_area = Rect2i_add_padding_all(area, 10);
+    Rect2i draw_area = area;
     V2i texture_size = v2i(texture.width, texture.height);
 
     zoompanel_process(&ctx->zoompanel, texture_size, draw_area);
@@ -324,10 +334,9 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     BeginTextureMode(ctx->draw.aux_viewport);
     ClearBackground(BLANK);
-    DrawRectangleReci(final, LIGHTGRAY);
+    DrawRectangleReci(draw_area, DARKGRAY);
+    DrawRectangleReci(final, DEFAULT_BG);
     DrawTextureScaled(texture, final);
-    DrawRectangleLinesEx((Rect2i_to_Rect2(draw_area)).rect, 1, RED);
-
 
     {
         // Draw current sprites.
