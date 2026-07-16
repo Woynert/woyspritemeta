@@ -225,6 +225,9 @@ Vector2 MeasureTextEx_woy(Font font, strview_t string, float fontSize, float spa
     return textSize;
 }
 
+V2i MeasureTextEx_woyi(Font font, strview_t string, int fontSize, int spacing, int textLineSpacing) {
+    return Vector2_to_v2i(MeasureTextEx_woy(font, string, (float)fontSize, (float)spacing, (float)textLineSpacing));
+}
 
 
 void DrawTextEx_strview_i(

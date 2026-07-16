@@ -510,7 +510,7 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     case SHEETEDITOR_CURSOR_RESIZE:
     {
         // Cancel.
-        if (IsKeyPressed(KEY_ESCAPE) || winput_mice_pressed(MouseRight)) {
+        if (winput_mice_pressed(MouseRight) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
             spritesheet_reset_cursor_mode(ctx);
             return;
         }

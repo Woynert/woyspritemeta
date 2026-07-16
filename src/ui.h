@@ -293,7 +293,6 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 }
 
 void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
-
     UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
 
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
@@ -302,7 +301,11 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     V2i mouse = GetMousePositioni();
 
-    if (ctx->spritesheet_list.size <= 0) { return; }
+    if (ctx->spritesheet_list.size <= 0) {
+        DrawRectangleReci(widget.area, DEFAULT_BG);
+        ui_draw_text(ctx, cstr_SL("No spritesheet loaded."), v2i_add(widget.area.pos, v2ii(10)), DEFAULT_FG);
+        return;
+    }
 
     // Spritesheet viewport ↓↓↓
 
@@ -396,6 +399,58 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 }
 
 
+void ui_widget_spritesheet_hints(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+    {
+        // This widget is unfocusable.
+        // Report back as having NO focus area at all.
+        if (req != NULL && req->request_focus_area) {
+            req->success = 1;
+            req->focus_area = (Rect2i) { 0 };
+            return;
+        }
+    }
+
+    if (ctx->spritesheet_list.size <= 0) { return; }
+
+    strview_t text = STRVIEW_INVALID;
+
+    switch(ctx->editor.cursor) {
+    case SHEETEDITOR_CURSOR_TWEAK:
+    {
+        if (ctx->editor.selected_sprites.size > 0) {
+            text = cstr_SL(
+                "G to move.\n"
+                "S to resize.\n"
+                "X to delete."
+            );
+        }
+        break;
+    }
+    case SHEETEDITOR_CURSOR_DRAG:
+    case SHEETEDITOR_CURSOR_RESIZE:
+    {
+        text = cstr_SL(
+            "Left click to confirm.\n"
+            "Right click, Escape, Q to cancel."
+        );
+        break;
+    }
+    case SHEETEDITOR_CURSOR_ADD:
+    {
+        if (ctx->editor.add_can_undo) {
+            text = cstr_SL(
+                "Ctrl + Z to undo."
+            );
+        }
+        break;
+    }
+    default: { return; }
+    }
+
+    V2i measure = MeasureTextEx_woyi(ctx->draw.font, text, ctx->draw.font_size, ctx->draw.char_spacing, ctx->draw.line_spacing);
+    ui_draw_text(ctx, text, v2i_sub(v2i_add(widget.area.pos, widget.area.size), measure), DEFAULT_FG);
+}
+
 void ui_widget_spritesheet(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
     UI_WIDGET_DEFAULT_RESPONSE_AND_RETURN(req);
@@ -403,6 +458,7 @@ void ui_widget_spritesheet(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
     Widget widgets[] = {
         { .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_viewport, },
         { .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_cursors },
+        { .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_hints },
     };
 
     ui__calculate_focus_and_draw_widgets(ctx, widgets, countof(widgets));
