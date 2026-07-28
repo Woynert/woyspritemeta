@@ -8,18 +8,15 @@
 #include "la.h"
 #include "winput.h"
 #include "rlgl.h"
+#include "portable_utils.h"
 
-#define UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req) do {            \
+#define UI_WIDGET_DEFAULT_REQUEST_HANDLER(req) do {            \
     if (req != NULL) {                                             \
         if (req->focus_area_request && !req->focus_area_success) { \
             req->focus_area_success = true;                        \
             req->focus_area = widget.area;                         \
         }                                                          \
-        if (req->max_area_request && !req->max_area_success) {     \
-            req->max_area_success = true;                          \
-            req->max_area = widget.area;                           \
-        }                                                          \
-        return;                                                    \
+        /* return; */                                              \
     }} while (0)
 
 #define DEFAULT_BG LIGHTGRAY
@@ -125,6 +122,41 @@ Rect2i ui_draw_sprite(Ctx *ctx, Sprite *sprite, Rect2i area) {
 }
 
 
+void ui_widget_scroll(Widget *widget) {
+    if (!widget->scroll_enabled) { return; }
+
+    if (widget->focused) {
+        enum { SCROLL_PX = 60 };
+        int scroll = (int)winput_wheel();
+        printfd("Got scroll %d", scroll);
+        if (scroll != 0) {
+            widget->scroll_px -= scroll * SCROLL_PX;
+        }
+        int max_scroll =
+            int_max(widget->scroll_max_px, widget->screen_area.height)
+            - widget->screen_area.height;
+
+        printvalnum(widget->scroll_max_px);
+        printvalnum(widget->screen_area.height);
+        printvalnum(max_scroll);
+
+        widget->scroll_px = int_clamp(0, max_scroll, widget->scroll_px);
+    }
+
+    /* Apply scroll. */
+    widget->draw_info.area.y -= widget->scroll_px;
+
+    /*
+       TODO: Show scrollbar.
+        widget->show_scrollbar = max_scroll > 0;
+
+        if (widget->show_scrollbar) {
+            widget_draw.area.width -= SCROLLBAR_WIDTH_PX;
+        }
+    */
+}
+
+
 void ui__spritesheet_draw_scaled_rect(Rect2i r, V2i translate, float scale, Color tint) {
     DrawRectangleRecf((Rect2) {
         .pos = v2f_translate_scale(r.pos, translate, scale),
@@ -153,7 +185,7 @@ void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, float scale
 
 void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
+    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     Rect2i area = widget.area;
     const int line_height = ctx->draw.line_height;
@@ -192,7 +224,7 @@ void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
 void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
+    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     Rect2i area = widget.area;
     const int line_height = ctx->draw.line_height * 2;
@@ -246,7 +278,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *re
 
 void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
+    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
 
@@ -297,17 +329,15 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
         if (highlight) { DrawRectangleReci(item_area, BLUE); }
 
-        if (sprite->frames == 1) {
-            strbuf_printf(&aux_str, "%"PRIstr" %dx%d offset %d,%d",
-                PRIstrargbuf(sprite->name),
-                sprite->size.x, sprite->size.y, sprite->offset.x, sprite->offset.y
-            );
-        } else {
-            strbuf_printf(&aux_str, "%"PRIstr" (%d frames) %dx%d offset %d,%d",
-                PRIstrargbuf(sprite->name), sprite->frames,
-                sprite->size.x, sprite->size.y, sprite->offset.x, sprite->offset.y
-            );
+        strbuf_assign(&aux_str, cstr_SL(""));
+        if (sprite->frames > 1) {
+            strbuf_append_printf(&aux_str, "(%d frames) ", sprite->frames);
         }
+        strbuf_append_printf(&aux_str,"%dx%d offset %d,%d\n%"PRIstr,
+            sprite->size.x, sprite->size.y, sprite->offset.x, sprite->offset.y,
+            PRIstrargbuf(sprite->name)
+        );
+
         ui_draw_text(ctx, strbuf_view2(aux_str), text_offset, DEFAULT_FG);
 
         // Draw texture.
@@ -319,7 +349,7 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
 
 void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
-    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
+    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     int *selected_sprite_ref = get_selected_sprite(ctx);
     if (selected_sprite_ref == NULL) { return; }
@@ -333,7 +363,51 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
     DrawRectangleReci(widget.area, DARKGRAY);
     Rect2i area = widget.area;
 
-    // Draw controls
+    // Draw name controls.
+    {
+        Rect2i line_box = area;
+        line_box.height = ctx->draw.line_height;
+        line_box.y      = area.y + area.height - line_box.height *2;
+
+        DrawRectangleReci(line_box, DEFAULT_BG);
+
+        Rect2i label_box = line_box;
+        label_box.width -= label_box.height;
+
+        Rect2i btn_edit_box = line_box;
+        btn_edit_box.width = label_box.height;
+        btn_edit_box.x += label_box.width;
+
+        // Name.
+        {
+            DrawRectangleLinesi(label_box, BLACK, 1);
+            strview_t view;
+            if (sprite->name->size == 0) {
+                view = cstr_SL("<unnamed>");
+            } else {
+                view = cstr(TextFormat("\"%"PRIstr"\"", PRIstrargbuf(sprite->name)));
+            }
+            ui_draw_text(ctx, view, label_box.pos, DEFAULT_FG);
+        }
+
+        // Edit name button.
+        if (ui_simple_button(btn_edit_box)) {
+            const char *default_input = sprite->name->size > 0 ? sprite->name->cstr : "name";
+            const char *new_name_cstr = tinyfd_inputBox("Rename", "Insert new name for Sprite", default_input);
+            if (new_name_cstr != NULL) {
+                strview_t new_name = cstr(new_name_cstr);
+                if (sprite_name_already_exists(ctx, new_name)) {
+                    tinyfd_messageBox("Error", "Name already exists", "ok", "error", 1);
+                } else {
+                    strbuf_assign(&sprite->name, new_name);
+                }
+            }
+        }
+
+        ui_draw_text(ctx, cstr_SL("Edit"), btn_edit_box.pos, DEFAULT_FG);
+    }
+
+    // Draw frame controls.
     {
         Rect2i line_box = area;
         line_box.height = ctx->draw.line_height;
@@ -341,12 +415,11 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
 
         Rect2i chunks[3];
         Rect2i_split_horizontally(line_box, 3, chunks, { 1/2.f, 1/4.f });
-
         Rect2i label_box       = chunks[0];
         Rect2i frame_minus_box = chunks[1];
         Rect2i frame_plus_box  = chunks[2];
 
-        DrawRectangleLinesi(line_box, DEFAULT_BG, 1);
+        DrawRectangleReci(line_box, DEFAULT_BG);
         ui_draw_text(ctx, cstr(TextFormat("Frames %d", sprite->frames)), label_box.pos, DEFAULT_FG);
         DrawRectangleLinesi(label_box, BLACK, 1);
 
@@ -397,7 +470,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
             req->focus_area = btn_area;
             req->focus_area.height *= SHEETEDITOR_CURSOR__COUNT;
         }
-        UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
+        UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
     }
 
     SHEETEDITOR_CURSOR mode;
@@ -442,7 +515,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 }
 
 void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
-    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
+    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
 
@@ -601,18 +674,23 @@ void ui_widget_spritesheet_hints(Ctx *ctx, const WidgetDraw widget, WidgetReq *r
 
 void ui_widget_spritesheet(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_HANDLE_REQUEST_AND_RETURN(req);
+    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
-    Widget widgets[] = {
-        { .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_viewport, },
-        { .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_cursors },
-        { .draw = { .area = widget.area }, .draw_function = ui_widget_spritesheet_hints },
+    static Widget widgets[] = {
+        { .draw_function = ui_widget_spritesheet_viewport, },
+        { .draw_function = ui_widget_spritesheet_cursors   },
+        { .draw_function = ui_widget_spritesheet_hints     },
     };
+
+    for (foreach_auto(Widget, w, widgets)) {
+        w.ref->screen_area = widget.area;
+    }
 
     ui__calculate_focus_and_draw_widgets(ctx, widgets, countof(widgets));
 }
 
 
+/*
 /// @returns Index of widget with focus or -1.
 int ui__calculate_focus(const Widget_view widgets) {
     for (int i = widgets.size-1; i > -1; --i) {
@@ -621,36 +699,90 @@ int ui__calculate_focus(const Widget_view widgets) {
     }
     return -1;
 }
+*/
 
 
-void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, int count) {
-    // Update focus areas.
+void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, const int count) {
 
+    // Query focus areas.
+
+    /*
     for (int i = 0; i < count; ++i)
     {
         Widget *w = &widgets[i];
         WidgetReq req = { .focus_area_request = true };
-
-        (w->draw_function)(ctx, w->draw, &req);
+        w->draw_function(ctx, (WidgetDraw){ .area = w->screen_area }, &req);
 
         if (req.focus_area_success) {
             w->focus_area = req.focus_area;
         } else {
             printfd("WAR: Widget %d didn't respond.", i);
-            w->focus_area = w->draw.area;
+            w->focus_area = w->screen_area;
+        }
+    }
+    */
+
+    // Reset focus.
+
+    for (int i = 0; i < count; ++i) {
+        Widget *w = &widgets[i];
+        w->focused = false;
+    }
+
+    // Calculate focus in reverse.
+
+    for (int i = count -1; i > -1; i += -1) {
+        Widget *w = &widgets[i];
+        if (Rect2i_collides_V2i(w->focus_area, GetMousePositioni())) {
+            w->focused = true;
+            break;
         }
     }
 
-    int focus = ui__calculate_focus((Widget_view){ widgets, count });
-    if (int_in_range_inclusive(0, count-1, focus)) {
-        widgets[focus].draw.focused = true;
+    // Sync draw area.
+
+    for (int i = 0; i < count; ++i) {
+        Widget *w = &widgets[i];
+        w->draw_info = (WidgetDraw) {
+            .focused = w->focused,
+            .area = w->screen_area,
+        };
+    }
+
+    // Calculate scroll.
+
+    for (int i = 0; i < count; ++i) {
+        Widget *w = &widgets[i];
+        ui_widget_scroll(w);
     }
 
     // Draw.
 
     for (int i = 0; i < count; ++i) {
         Widget *w = &widgets[i];
-        (w->draw_function)(ctx, w->draw, NULL);
+
+        // Prepare some request to get some info about these widgets.
+
+        WidgetReq req = {
+            .focus_area_request = true,
+            .scroll_max_px_request = w->scroll_enabled,
+        };
+
+        // Finally draw on screen.
+
+        w->draw_function(ctx, w->draw_info, &req);
+
+        // Handle query responses.
+
+        if (req.scroll_max_px_success) {
+            w->scroll_max_px = req.scroll_max_px;
+        }
+        if (req.focus_area_success) {
+            w->focus_area = req.focus_area;
+        } else {
+            printfd("WAR: Widget %d didn't respond.", i);
+            w->focus_area = w->screen_area;
+        }
     }
 }
 
@@ -658,35 +790,213 @@ void ui_draw_all(Ctx *ctx) {
 
     // Collect draw functions.
 
-    Widget widgets[] = {
-        { .draw_function = ui_widget_options,          },
-        { .draw_function = ui_widget_spritesheet_list, },
-        { .draw_function = ui_widget_sprite_list,      },
-        { .draw_function = ui_widget_sprite_preview,   },
-        { .draw_function = ui_widget_spritesheet,      },
+    static Widget widgets[] = {
+        [0] = { .draw_function = ui_widget_options         ,                         },
+        [1] = { .draw_function = ui_widget_spritesheet_list, .scroll_enabled = true, },
+        [2] = { .draw_function = ui_widget_sprite_list     , .scroll_enabled = true, },
+        [3] = { .draw_function = ui_widget_sprite_preview  ,                         },
+        [4] = { .draw_function = ui_widget_spritesheet     ,                         },
     };
-    int percentages[] = {
-        10,
-        15,
-        15,
-        10,
-        50
-    };
-    wstatic_assert(countofi(widgets) == countofi(percentages));
 
     // Subdivide window horizontally.
 
-    const int PAD = 2;
-    Rect2i area = {{ 0, 0, 0, GetScreenHeight() }};
+    Rect2i area = {{ 0, 0, GetScreenWidth(), GetScreenHeight() }};
+    Rect2i chunks[4];
+    Rect2i_split_horizontally(area, 4, chunks, { 0.1f, 0.15f, 0.20f });
 
-    for(foreach_auto(Widget, widget, widgets))
-    {
-        area.x += area.width;
-        area.width = (int)(((float)percentages[widget.index] / 100.f) * (float)GetScreenWidth());
-        widget.ref->draw.area = Rect2i_add_padding_all(area, PAD);
+    Rect2i chunk_sprite_list = chunks[2];
+    Rect2i up = chunk_sprite_list;
+    up.height /= 2;
+    Rect2i down = chunk_sprite_list;
+    down.y += up.height;
+    down.height = chunk_sprite_list.height - up.height;
+
+    widgets[0].screen_area = chunks[0];
+    widgets[1].screen_area = chunks[1];
+    widgets[2].screen_area = up;
+    widgets[3].screen_area = down;
+    widgets[4].screen_area = chunks[3];
+
+    const int PAD = 2;
+    for(foreach_auto(Widget, widget, widgets)) {
+        widget.ref->screen_area = Rect2i_add_padding_all(widget.ref->screen_area, PAD);
     }
 
     ui__calculate_focus_and_draw_widgets(ctx, widgets, countof(widgets));
+}
+
+/*
+void ui_split_h(Ctx *ctx, const Rect2i area, int child_count, Widget *children, WidgetContainer *container) {
+
+    // State here
+    //float split = data.split;
+
+    Rect2i chunk_area = {{ 0, 0, 0, area.height }};
+    for (int i = 0; i < 0; ++i) {
+        chunk_area.x += area.width / child_count;
+        children[i].screen_area = chunk_area;
+    }
+
+    DrawRectangleReci(area, DEFAULT_BG);
+    ui__calculate_focus_and_draw_widgets(ctx, children, child_count);
+}
+
+void ui_draw_all_mimo(Ctx *ctx) {
+    static bool setup = false;
+
+    WidgetMeta spritesheet_list = {
+        .type = WIDGET_TYPE_NORMAL,
+        .normal.draw_function = ui_widget_spritesheet_list,
+    };
+
+    WidgetMeta sprite_list = {
+        .type = WIDGET_TYPE_NORMAL,
+        .normal.draw_function = ui_widget_sprite_list,
+    };
+
+    WidgetMeta editor = {
+        .type = WIDGET_TYPE_CONTAINER,
+        .container.container_function = ui_split_h,
+    };
+
+    WidgetMeta widgets[2] = { spritesheet_list, sprite_list };
+
+    ui_split_h(ctx, countof(2), widgets);
+
+
+    //for (int
+}
+*/
+
+/*
+void ui_split_options_AND_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+    static Widget widgets[] = {
+        [0] = { .draw_function = ui_widget_options    ,                         },
+        [2] = { .draw_function = ui_widget_sprite_list, .scroll_enabled = true, },
+    };
+    static WidgetContainer split_state = {
+        .type = CONTAINER_TYPE_SPLIT_H_PERCENTAGE,
+    };
+    ui_split_h(ctx, widget.area, countof(widgets), widgets, &split_state);
+}
+
+
+void ui_draw_all2(Ctx *ctx) {
+
+    static Widget widgets[] = {
+        { .draw_function = ui_split_options_AND_sprite_list,                         },
+        { .draw_function = ui_widget_spritesheet           ,                         },
+        { .draw_function = ui_split_options_AND_sprite_list,                         },
+    };
+
+    static WidgetContainer split_state = {
+        .type = CONTAINER_TYPE_SPLIT_H_PERCENTAGE,
+        .split.adjustable = true,
+        .split.percentage = 0.2f,
+    };
+
+    Rect2i area = {{ 0, 0, GetScreenWidth(), GetScreenHeight() }};
+
+    ui_split_h(ctx, area, countof(widgets), widgets, &split_state);
+}
+*/
+
+
+//#include "./src/standalone/wguitree.h"
+#include "./standalone/woyguitree.h"
+
+
+void widget_v_split(Rect2i area, bool focused, Ctx *ctx, int child_count, Rect2i *children) {
+    DrawRectangleLinesi(area, BLUE, 2);
+
+    for (int i = 0; i < child_count; ++i) {
+        Rect2i *child = &children[i];
+        child->height = area.height / child_count;
+        child->y = area.y + child->height * i;
+    }
+}
+
+
+void widget_simple_text(Rect2i area, bool focused, Ctx *ctx, int child_count, Rect2i *children) {
+    DrawRectangleReci(area, BLUE);
+    DrawRectangleLinesi(area, BLUE, 2);
+    ui_draw_text(ctx, cstr_SL("HELLO"), area.pos, RED);
+}
+
+
+
+
+void ui_draw_all3(Ctx *ctx) {
+
+    static Wguitree guitree = { 0 };
+    static bool setup = false;
+    if (!setup) {
+        setup = true;
+        wguitree_create(&guitree);
+    }
+
+    wguitree_build_start(&guitree, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()+1}});
+
+    Node con_tree = {
+        .is_container = true,
+        .container.type = ContainerRoot,
+    };
+
+    // Add split.
+    Node con_vlist = {
+        .is_container = true,
+        .container.type = ContainerListV,
+        .container.identifier = cstr_SL("MAIN_V_LIST"),
+    };
+
+    {
+        Node widget_config = { .content.draw_func = ui_widget_options };
+        wguitree_container_add_child(&guitree, &con_vlist, widget_config);
+    }
+
+    {
+        Node con_hlist = {
+            .is_container = true,
+            .container.type = ContainerListH,
+            .container.identifier = cstr_SL("SECONDARY_H_LIST"),
+        };
+
+        {
+            Node widget_sprite_list = { .content.draw_func = ui_widget_sprite_list };
+            wguitree_container_add_child(&guitree, &con_hlist, widget_sprite_list);
+            wguitree_container_add_child(&guitree, &con_hlist, widget_sprite_list);
+        }
+
+        wguitree_container_add_child(&guitree, &con_vlist, con_hlist);
+    }
+
+    {
+        Node widget_config = { .content.draw_func = ui_widget_options };
+        wguitree_container_add_child(&guitree, &con_vlist, widget_config);
+    }
+
+    wguitree_container_add_child(&guitree, &con_tree, con_vlist);
+
+    guitree.root_node = con_tree;
+    wguitree_build_end(&guitree);
+
+    wgtr_List_DrawInfo_It it = { 0 };
+    while(wgtr_List_DrawInfo_it_next(&guitree.out_draw_list, &it)) {
+        DrawInfo draw = *it.item;
+        printfd("(user space) Widget right here! :) "Rect2i_Fmt, Rect2i_Arg(draw.area));
+        //draw.widget.draw_func(ctx, 
+    }
+
+    printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (guitree.arena.end - guitree.arena.beg)), PRIbytearg(1 << 20));
+
+
+    /*
+       for widget in Widgets:
+            widget.draw(has_focus, etc, ...);
+    */
+
+    //RLGL.State.curren
+    //RLGL.currentBatch->currentDepth += (1.0f/20000.0f);
 }
 
 #endif // !UI
