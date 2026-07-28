@@ -19,3 +19,6 @@ compile:
 
 run:
 	LSAN_OPTIONS=suppressions=suppr.txt ./build/sprite
+
+# For running labs:
+# make compile && LSAN_OPTIONS=suppressions=suppr.txt LD_LIBRARY_PATH=/etc/lsb/lib/ ./build/mylab

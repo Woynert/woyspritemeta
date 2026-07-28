@@ -98,6 +98,18 @@ gdbwui_exe = executable(
   ,c_args : my_extra_args
 )
 
+drawbuffer_lab = executable(
+  'drawbuffer_lab'
+  ,'./src/lab/drawbuffer_lab.c'
+  ,include_directories : core_includes
+  ,dependencies : [
+    mickstr_dep,
+    raylib_dep,
+    woycontainer_dep
+  ]
+  ,c_args : my_extra_args
+)
+
 #scroll_exe = executable(
   #'scroll'
   #,'src/scroll.c'

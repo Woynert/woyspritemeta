@@ -1,4 +1,7 @@
-#include "arena.h"
+#ifndef ARENA_EXTRA_H
+#define ARENA_EXTRA_H
+
+#include "../subprojects/woycontainer/src/arena.h"
 #include "strbuf.h"
 
 static void* arena_strbuf_allocator(
@@ -31,7 +34,7 @@ static strbuf_allocator_t make_arena_strbuf_allocator(Arena *arena) {
     return (strbuf_allocator_t) { .app_data = arena, .allocator = &arena_strbuf_allocator };
 }
 
-static void* arena_allocator(void* user_data, void* ptr, size_t size, int align) {
+static void* arena_allocator(void* ptr, size_t size, int align, void* user_data) {
     // New allocation: ptr == NULL && size > 0
     // Reallocation:   ptr != NULL && size > 0
     // Free:           ptr != NULL && size == 0
@@ -49,3 +52,5 @@ static void* arena_allocator(void* user_data, void* ptr, size_t size, int align)
 
     return result;
 }
+
+#endif // !ARENA_EXTRA_H

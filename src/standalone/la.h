@@ -1,9 +1,6 @@
 #ifndef LA_H_
 #define LA_H_
 
-/* WOYNERT PATCH: Add raylib Vector2 as part of the union V2f. */
-#include "raylib.h"
-
 #include <math.h>
 #include <stdbool.h>
 
@@ -39,7 +36,6 @@ LADEF unsigned int clampu(unsigned int x, unsigned int a, unsigned int b);
 typedef union {
     struct { float x, y; };
     float c[2];
-    Vector2 raylib;
 } V2f;
 
 typedef union {

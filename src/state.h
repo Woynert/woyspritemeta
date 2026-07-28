@@ -116,7 +116,7 @@ typedef struct Ctx {
         Arena arena;
         strbuf_allocator_t strbuf_alloc;
     } frame_arena;
-    // [ Arenas ]
+    // [ !Arenas ]
 } Ctx;
 
 int _init_ctx(Ctx *ctx) {
@@ -171,26 +171,87 @@ void _free_ctx(Ctx *ctx) {
     ArenaRoot_free(&ctx->frame_arena.root);
 }
 
-typedef struct WidgetDraw {
-    Rect2i area;
-    bool focused;
-} WidgetDraw;
-
 typedef struct WidgetReq {
     bool   focus_area_request;
     bool   focus_area_success;
     Rect2i focus_area;
 
-    bool   max_area_request;
-    bool   max_area_success;
-    Rect2i max_area;
+    bool scroll_max_px_request;
+    bool scroll_max_px_success;
+    int  scroll_max_px;
 } WidgetReq;
 
+typedef struct WidgetDraw {
+    Rect2i area;
+    bool focused;
+    int scroll_px;
+} WidgetDraw;
+
+typedef enum WIDGET_TYPE {
+    WIDGET_TYPE_NORMAL,
+    WIDGET_TYPE_CONTAINER,
+} WIDGET_TYPE;
+
+typedef struct WidgetData {
+    WIDGET_TYPE type;
+    /*
+    union {
+        struct {
+            int children_count;
+            Widget *children;
+        } split;
+        float split;
+        int mimo;
+        float mimo2;
+    };
+    */
+} WidgetData;
+
 typedef struct Widget {
-    WidgetDraw draw;
+    Rect2i screen_area;
     Rect2i focus_area;
+    bool focused;
+    
+    WidgetDraw draw_info; /* Passed to draw function. */
+
     void (*draw_function)(Ctx *ctx, const WidgetDraw widget, WidgetReq *req);
+
+    bool scroll_enabled;
+    int scroll_px;
+    int scroll_max_px; /* Max height, reported by the widget draw_function through WidgetReq. */
+
+    WidgetData widget_data;
 } Widget;
+
+//enum WIDEG
+
+typedef struct WidgetMeta {
+    WIDGET_TYPE type;
+    union {
+        struct {
+            void (*draw_function)(Ctx *ctx, const WidgetDraw widget, WidgetReq *req);
+            bool scroll_enabled;
+        } normal;
+        struct {
+            void (*container_function)(Ctx *ctx, int child_count, Widget *children);
+        } container;
+    };
+} WidgetMeta;
+
+typedef enum CONTAINER_TYPE {
+    CONTAINER_TYPE_SPLIT_H_PERCENTAGE,
+    CONTAINER_TYPE_SPLIT_H_PIXEL,
+} CONTAINER_TYPE;
+
+typedef struct WidgetContainer {
+    CONTAINER_TYPE type;
+    union {
+        struct {
+            float percentage;
+            bool adjustable; /* Allows you to adjust the amount of split */
+        } split;
+    };
+} WidgetContainer;
 
 #define MAKEVIEW__TYPE Rect2i
 #include "make_view.h"

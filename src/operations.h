@@ -61,9 +61,9 @@ void ctx_load_assets(Ctx *ctx) {
 
     // Draw
     ctx->draw.font_size = 18;
-    ctx->draw.line_spacing = 2;
+    ctx->draw.line_spacing = 0;
     ctx->draw.char_spacing = 0;
-    ctx->draw.line_height = ctx->draw.font_size +ctx->draw.line_spacing;
+    ctx->draw.line_height = ctx->draw.font_size +ctx->draw.line_spacing +2;
     ctx->draw.font = load_font_with_buncha_codepoints(
             "assets/Roboto-Regular.ttf", ctx->draw.font_size);
 
@@ -292,6 +292,16 @@ void remove_sprite(Ctx *ctx, int index) {
        @Note: Every time the ctx->sprites list is modified
        ctx->editor.selected_sprites should be cleared.
     */
+}
+
+
+bool sprite_name_already_exists(Ctx *ctx, strview_t name) {
+    for (dyna_foreach(Sprite, sprite, ctx->sprites)) {
+        if (strview_equal(name, strbuf_view2(sprite.ref->name))) {
+            return true;
+        }
+    }
+    return false;
 }
 
 

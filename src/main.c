@@ -7,6 +7,9 @@
 #include "tinyfiledialogs.h"
 #include "ui.h"
 #include "quick_monitor.h"
+#include "raylib_drawbuffer.h"
+
+/*#include "map_string.h"*/
 
 #define LA_IMPLEMENTATION
 #include "la.h"
@@ -47,6 +50,7 @@ int main(void) {
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(init_win_w, init_win_h, "woyspritemeta");
+    drawbuf_init();
 
     // Post InitWindow setup:
 
@@ -67,14 +71,14 @@ int main(void) {
         // Reset arena.
         ctx.frame_arena.arena = ArenaRoot_get_arena(ctx.frame_arena.root);
 
-        ui_draw_all(&ctx);
+        ui_draw_all3(&ctx);
         editor_process_cursor_logic(&ctx);
         editor_process_delete(&ctx);
 
         quickmonitor_draw();
         quickmonitor_line("fps %d", GetFPS());
-        ptrdiff_t used = (ptrdiff_t)(ctx.frame_arena.arena.beg - ctx.frame_arena.root.beg);
-        ptrdiff_t total = (ptrdiff_t)(ctx.frame_arena.root.end - ctx.frame_arena.root.beg);
+        ptrdiff_t used = (ptrdiff_t)(ctx.frame_arena.arena.beg - ctx.frame_arena.root.buf);
+        ptrdiff_t total = (ptrdiff_t)(ctx.frame_arena.root.cap);
         quickmonitor_line("frame_arena %td/%td (%.3f%%)", used, total, ((float)used/(float)total)*100.0);
 
         winput_consume_all();
@@ -83,6 +87,7 @@ int main(void) {
 
     free_ctx(&ctx);
     CloseWindow();
+    drawbuf_deinit();
 
     return 0;
 }

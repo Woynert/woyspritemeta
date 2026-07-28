@@ -172,6 +172,15 @@ void DrawTextEx_strview(
     }
 }
 
+
+void DrawTextEx_strview_i(
+    Font font, const strview_t string, V2i position, int fontSize,
+    int spacing, int textLineSpacing, Color tint
+) {
+    DrawTextEx_strview(font, string, v2i_to_Vector2(position), (float)fontSize, (float)spacing, (float)textLineSpacing, tint);
+}
+
+
 /*
  * Extracted from rtext.c
  * @note: Uses strview_t instead of Cstrings.
@@ -232,13 +241,6 @@ V2i MeasureTextEx_woyi(Font font, strview_t string, int fontSize, int spacing, i
     return Vector2_to_v2i(MeasureTextEx_woy(font, string, (float)fontSize, (float)spacing, (float)textLineSpacing));
 }
 
-
-void DrawTextEx_strview_i(
-    Font font, const strview_t string, V2i position, int fontSize,
-    int spacing, int textLineSpacing, Color tint
-) {
-    DrawTextEx_strview(font, string, v2i_to_Vector2(position), (float)fontSize, (float)spacing, (float)textLineSpacing, tint);
-}
 
 bool CheckCollisionPointReci(V2i point, Rect2i rec) {
     return ((point.x >= rec.x) && (point.x < (rec.x + rec.width)) && (point.y >= rec.y) && (point.y < (rec.y + rec.height)));

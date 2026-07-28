@@ -19,38 +19,25 @@ typedef enum {
     ContainerStack,
 } ContainerType;
 
-typedef struct wguitree_WidgetState {
+typedef struct wgtr_WidgetState {
     int scroll;
-} wguitree_WidgetState;
+    int __last_frame; // Used to determine if we should persist it or forget it.
+} wgtr_WidgetState;
 
-#define STRMAP__TYPE wguitree_WidgetState
-#define STRMAP__NAMESPACE wguitree_strmap_state
+#define STRMAP__TYPE wgtr_WidgetState
+#define STRMAP__NAMESPACE wgtr_Map_str_state
 #include "../subprojects/woycontainer/src/strmap.h"
 
 typedef struct Node Node;
-//typedef struct Content Content;
-//typedef struct Container Container;
-
-typedef struct Content {
-    int data;
-    /* ↓↓↓ draw_func == NULL means this node is inactive. */
-    void (*draw_func)(Ctx *ctx, const WidgetDraw widget, WidgetReq *req);
-    //void (*draw_func)(DRAW_FUNC_ARG_TYPE);
-} Content;
 
 typedef struct DrawInfo {
-    Content widget;
+    int    user_draw_func_id;          // An id for the user to identify which function to call.
     Rect2i area;
-    wguitree_WidgetState *state;
+    wgtr_WidgetState *state;       // Persistent state, can be used to keep container's scroll value, etc.
+    bool     container_layout_request; // Only true, if this widget is marked as a Container.
+    int      child_count;
+    Rect2i **out_children;
 } DrawInfo;
-
-//#define DYNA__TYPE DrawInfo
-//#define DYNA__NAMESPACE wgtr_Vec_DrawInfo
-//#include "da.h"
-
-//#define DYNA__TYPE wgtr_Vec_DrawInfo
-//#define DYNA__NAMESPACE wgtr_Vec_Vec_DrawInfo
-//#include "da.h"
 
 #define LIST__TYPE DrawInfo
 #define LIST__NAMESPACE wgtr_List_DrawInfo
@@ -65,19 +52,22 @@ typedef struct DrawInfo {
 #define DYNA__ONLY_HEADER
 #include "da.h"
 
-typedef struct Container {
-    ContainerType type;
-    strview_t identifier;
-    wguitree_node_da children;
-    //default_state; @Todo.
-} Container;
 
 typedef struct Node {
+    strview_t identifier;    // It's OK if a widget has no identifier. It's state won't persist thru frames.
+    bool has_user_draw_func;  // User must check this, if adding an user_function_id.
+    int user_draw_func_id;    // An id for the user to identify which function to call.
+
+    void (*container_func)(Rect2i area, int child_count, Rect2i *children, void *user_ctx, wgtr_WidgetState *state);
+
     bool is_container;
-    union {
-        Container container;
-        Content content;
-    };
+    struct {
+        void *user_ctx; // User can set this to access it later on 'container_func' call.
+        ContainerType type;
+        wguitree_node_da children;
+    } container;
+
+    Rect2i _area; // Used to hold the area momentarily during end_tree.
 } Node;
 
 #define DYNA__TYPE Node
@@ -95,7 +85,9 @@ typedef struct Wguitree {
     any state with outdate frames then we remove it.
     */
     // Maps a title to a state. We might add or delete from this every frame.
-    wguitree_strmap_state title_to_state;
+    wgtr_Map_str_state title_to_state;
+    //Map<string, State>
+    //wgtr_Map_str_State
 
     int frame;
 
@@ -107,6 +99,7 @@ typedef struct Wguitree {
     //wgtr_Vec_DrawInfo out_draw_list;
     wgtr_List_DrawInfo out_draw_list;
 
+    wgtr_WidgetState state_non_persistent; // Fallback for nodes which have no identifier.
 } Wguitree;
 
 /// @Returns error.
@@ -114,12 +107,12 @@ int wguitree_create(Wguitree *t) {
     *t = (Wguitree) { 0 };
     t->arenaroot = ArenaRoot_create(1 << 20);
     //t->draws_da = wguitree_drawinfo_da_create();
-    return wguitree_strmap_state_create(&t->title_to_state);
+    return wgtr_Map_str_state_create(&t->title_to_state);
 }
 
 void wguitree_free(Wguitree *t) {
     ArenaRoot_free(&t->arenaroot);
-    wguitree_strmap_state_free(&t->title_to_state);
+    wgtr_Map_str_state_free(&t->title_to_state);
     //wguitree_drawinfo_da_free(&t->draws_da);
     *t = (Wguitree) { 0 };
 }
@@ -141,8 +134,8 @@ void wguitree_print_tree(Node *node, int level) {
     }
 
     printf(" type:%d", node->container.type);
-    if (node->container.identifier.size > 0) {
-        printf(" id:%"PRIstr, PRIstrarg(node->container.identifier));
+    if (node->identifier.size > 0) {
+        printf(" id:%"PRIstr, PRIstrarg(node->identifier));
     }
     printf("\n");
 
@@ -181,6 +174,213 @@ Rect2i wguitree_calculate_area_for_child_n(ContainerType type, Rect2i source, in
 }
 
 
+/// @Returns state or NULL.
+wgtr_WidgetState * wguitree__try_get_saved_state(Wguitree *t, strview_t key) {
+    if (key.size == 0) {
+        // No key means no state, sorry.
+        return NULL;
+    }
+    wgtr_WidgetState *state = wgtr_Map_str_state_get(&t->title_to_state, key);
+    if (state == NULL) {
+        int err = wgtr_Map_str_state_upsert(&t->title_to_state, key, (wgtr_WidgetState) {0});
+        if (err != 0) { return NULL; }
+        state = wgtr_Map_str_state_get(&t->title_to_state, key);
+    } else if ((t->frame - state->__last_frame) > 1) { // Note: Maybe this should go in the cleanup function.
+        printfd(ANSI_RED"INFO: (%"PRIstr") Resetting this old state. got %d expected %d", PRIstrarg(key), state->__last_frame, t->frame);
+        *state = (wgtr_WidgetState) {0};
+    } else {
+        //printfd(ANSI_GRE"INFO: (%"PRIstr") State. got %d expected %d", PRIstrarg(key), state->__last_frame, t->frame);
+    }
+    state->__last_frame = t->frame;
+    return state;
+}
+
+#define DYNA__TYPE int
+#define DYNA__NAMESPACE Vec_oldkeys
+#include "da.h"
+
+void wguitree__cleanup_saved_state(Wguitree *t) {
+    // Collect keys to purge.
+
+    Arena arena = t->arena;
+    strpool old_keys;
+    Vec_oldkeys old_keys_ids = Vec_oldkeys_create_with_allocator(arena_allocator, &arena);
+    strpool_create_with_allocator(&old_keys, arena_allocator, &arena);
+
+    wgtr_Map_str_state_It it = { 0 };
+    while (wgtr_Map_str_state_it_next(&t->title_to_state, &it)) {
+        if ((t->frame - it.value->__last_frame) > 1) {
+            int str_key_id = strpool_append(&old_keys, it.key);
+            Vec_oldkeys_append(&old_keys_ids, str_key_id);
+        }
+    }
+
+    // Remove all.
+    for (dyna_foreach(int, iter, old_keys_ids)) {
+        strview_t key = strpool_get(&old_keys, iter.index);
+        wgtr_Map_str_state_remove(&t->title_to_state, key);
+        printfd(ANSI_RED"DEBUG: Cleaning up this state %"PRIstr, PRIstrarg(key));
+    }
+}
+
+
+typedef struct {
+    Node *node;
+    int child_idx;
+    //Rect2i area;
+    int depth;
+} StackItem;
+#define DYNA__TYPE StackItem
+#define DYNA__NAMESPACE wguitree_stack_da
+#include "da.h"
+
+void wguitree_build_end(Wguitree *t) {
+    ++t->frame;
+    wguitree__cleanup_saved_state(t);
+
+    // For now let's just print the tree.
+    printfd("PRINTING TREE:");
+    wguitree_print_tree(&t->root_node, 0);
+
+    //t->draws_da = wguitree_drawinfo_da_create_with_allocator(arena_allocator, &t->arena);
+    //t->layers = wgtr_Vec_Vec_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
+
+    wgtr_Vec_List_DrawInfo layers = wgtr_Vec_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
+
+    // Let's say I wanna access id 0
+
+    // Ok. Now let's calculate the sizes of each.
+    printfd("Starting size calculation.");
+    {
+        // Let's maybe only save containers in our stack.
+
+        wguitree_stack_da stack = wguitree_stack_da_create_with_allocator(arena_allocator, &t->arena);
+
+        t->root_node._area = t->screen;
+        StackItem new_item = { // First item.
+            .node = &t->root_node,
+            .child_idx = 0,
+            //.area = t->screen,
+            .depth = 0,
+        };
+        goto NEW_ITEM;
+
+        NEW_ITEM:
+        {
+            if (new_item.node->container.children.size > 0) {
+                // Calculate children areas.
+                // Purposefully avoiding VLA here.
+                Arena arena_tmp = t->arena;
+                Rect2i *children_areas = arena_new(&arena_tmp, Rect2i, new_item.node->container.children.size);
+                if (new_item.node->container_func != NULL) {
+                    wgtr_WidgetState *state = wguitree__try_get_saved_state(t, new_item.node->identifier);
+                    wguitree__try_get_saved_state(t, new_item.node->identifier);
+                    state = state ? state : &t->state_non_persistent;
+                    new_item.node->container_func(new_item.node->_area, new_item.node->container.children.size, children_areas, new_item.node->container.user_ctx, state);
+                    for (int i = 0; i < new_item.node->container.children.size; ++i) {
+                        new_item.node->container.children.items[i]._area = children_areas[i];
+                    }
+                } else {
+                    printfd("ERROR: Container (%"PRIstr") has no 'container_function'.", PRIstrarg(new_item.node->identifier));
+                }
+            }
+
+            wguitree_stack_da_append(&stack, new_item);
+        }
+
+        CONTINUE:
+        {
+            StackItem *curr_item = wguitree_stack_da_get_safe(&stack, stack.size-1);
+            Node *self = curr_item->node;
+
+
+            for (; curr_item->child_idx < self->container.children.size; ++curr_item->child_idx) {
+                //printfd(ANSI_MAG"[Container type %d area "Rect2i_Fmt"] child %d/%d", self->container.type, Rect2i_Arg(curr_item->area), curr_item->child_idx+1, self->children.size);
+                Node *node = &self->container.children.items[curr_item->child_idx];
+
+                if (node->has_user_draw_func) {
+
+                    // Add to collection of DrawInfos.
+
+                    int depth = curr_item->depth;
+                    while(depth >= layers.size) {
+                        wgtr_List_DrawInfo new_layer = wgtr_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
+                        wgtr_Vec_List_DrawInfo_append(&layers, new_layer);
+                    }
+                    wgtr_List_DrawInfo *draw_layer = &layers.items[depth];
+
+                    printfd("(i %d) Widget right here! :) id (%"PRIstr") "Rect2i_Fmt, curr_item->child_idx, PRIstrarg(node->identifier), Rect2i_Arg(node->_area));
+
+                    // Check if we have state for this one.
+                    wgtr_WidgetState *state = wguitree__try_get_saved_state(t, node->identifier);
+                    state = state ? state : &t->state_non_persistent;
+                    DrawInfo draw_info = {
+                        .user_draw_func_id = node->user_draw_func_id,
+                        .area = node->_area,
+                        .state = state,
+                        //.container_layout_request = false,
+                        //.child_count = 0,
+                        //.out_children = NULL
+                    };
+
+                    wgtr_List_DrawInfo_append(draw_layer, draw_info);
+                }
+
+                if (node->is_container) {
+                    ++curr_item->child_idx;
+                    new_item = (StackItem) {
+                        .node = node,
+                        .child_idx = 0,
+                        //.area = node->_area,
+                        .depth = curr_item->depth +1,
+                    };
+
+                    goto NEW_ITEM;
+                }
+            }
+            // Finished with the children. Let's pop and go up.
+            wguitree_stack_da_remove_at(&stack, stack.size-1);
+            if (stack.size > 0) {
+                goto CONTINUE;
+            }
+        }
+    }
+    printfd("TREE HAS BEEN UHH PROCESSED");
+    printfd("Printing layered things");
+
+    // Populate final list.
+    // aka. Flatenning the list so the user can just iterate through it.
+
+    t->out_draw_list = wgtr_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
+
+    for (int i = layers.size -1; i > -1; i += -1) {
+        wgtr_List_DrawInfo_It it = { 0 };
+        while(wgtr_List_DrawInfo_it_next(&layers.items[i], &it)) {
+            wgtr_List_DrawInfo_append(&t->out_draw_list, *it.item);
+            printfd(ANSI_CYA"(depth %d) Widget right here! :) "Rect2i_Fmt, i, Rect2i_Arg(it.item->area));
+        }
+    }
+
+    t->state_non_persistent = (wgtr_WidgetState) { 0 };
+
+    printfd("This is the end");
+}
+
+
+void wguitree_container_add_child(Wguitree *t, Node *parent_node, Node child_node) {
+    if (!parent_node->is_container) {
+        printfd("WAR: Refusing to add child to non-container node.");
+        return;
+    }
+
+    if (parent_node->container.children.items == NULL) {
+        parent_node->container.children = wguitree_node_da_create_with_allocator(arena_allocator, &t->arena);
+    }
+
+    wguitree_node_da_append(&parent_node->container.children, child_node);
+}
+
+#endif
 
 /* @Todo: Find state that corresponds to this widget.
     @How? It is clear this node has no identifier. So, what
@@ -312,206 +512,3 @@ Rect2i wguitree_calculate_area_for_child_n(ContainerType type, Rect2i source, in
     There is a solution to this but the problem is that it would introduce a
     delay of one frame and I'm not sure if I want that.
 */
-
-typedef struct {
-    Node *node;
-    int child_idx;
-    Rect2i area;
-    int depth;
-} StackItem;
-#define DYNA__TYPE StackItem
-#define DYNA__NAMESPACE wguitree_stack_da
-#include "da.h"
-
-void wguitree_build_end(Wguitree *t) {
-    ++t->frame;
-
-    // For now let's just print the tree.
-    printfd("PRINTING TREE:");
-    wguitree_print_tree(&t->root_node, 0);
-
-    //t->draws_da = wguitree_drawinfo_da_create_with_allocator(arena_allocator, &t->arena);
-    //t->layers = wgtr_Vec_Vec_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
-
-    wgtr_Vec_List_DrawInfo layers = wgtr_Vec_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
-
-    // Let's say I wanna access id 0
-
-    // Ok. Now let's calculate the sizes of each.
-    printfd("Starting size calculation.");
-    {
-        // Let's maybe only save containers in our stack.
-
-        wguitree_stack_da stack = wguitree_stack_da_create_with_allocator(arena_allocator, &t->arena);
-        StackItem *curr_item = NULL;
-
-        StackItem new_item = { // First item.
-            .node = &t->root_node,
-            .child_idx = 0,
-            .area = t->screen,
-            .depth = 0,
-        };
-        goto NEW_ITEM;
-
-        NEW_ITEM:
-        {
-            //printfd("[Container type %d area "Rect2i_Fmt"]", new_item.node->container.type, Rect2i_Arg(new_item.area));
-            wguitree_stack_da_append(&stack, new_item);
-        }
-
-        CONTINUE:
-        {
-            curr_item = wguitree_stack_da_get_safe(&stack, stack.size-1);
-            Container *self = &curr_item->node->container;
-            for (; curr_item->child_idx < self->children.size; ++curr_item->child_idx) {
-                printfd(ANSI_MAG"[Container type %d area "Rect2i_Fmt"] child %d/%d", self->type, Rect2i_Arg(curr_item->area), curr_item->child_idx+1, self->children.size);
-                Node *node = &self->children.items[curr_item->child_idx];
-                Rect2i area = wguitree_calculate_area_for_child_n(self->type, curr_item->area, self->children.size, curr_item->child_idx);
-                if (!node->is_container) {
-
-                    // Add to collection of DrawInfos.
-
-                    int depth = curr_item->depth;
-                    while(depth >= layers.size) {
-                        wgtr_List_DrawInfo new_layer = wgtr_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
-                        wgtr_Vec_List_DrawInfo_append(&layers, new_layer);
-                    }
-                    wgtr_List_DrawInfo *draw_layer = &layers.items[depth];
-
-                    printfd("(i %d) Widget right here! :) "Rect2i_Fmt, curr_item->child_idx, Rect2i_Arg(area));
-
-                    wgtr_List_DrawInfo_append(draw_layer,
-                    (DrawInfo) {
-                        .area = area,
-                        .widget = node->content
-                    });
-                } else {
-                    ++curr_item->child_idx;
-                    new_item = (StackItem) {
-                        .node = node,
-                        .child_idx = 0,
-                        .area = area,
-                        .depth = curr_item->depth +1,
-                    };
-                    goto NEW_ITEM;
-                }
-            }
-            // Finished with the children. Let's pop and go up.
-            wguitree_stack_da_remove_at(&stack, stack.size-1);
-            if (stack.size > 0) {
-                goto CONTINUE;
-            }
-        }
-    }
-    printfd("TREE HAS BEEN UHH PROCESSED");
-    printfd("Printing layered things");
-
-    // Populate final list.
-
-    t->out_draw_list = wgtr_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
-
-    for (int i = layers.size -1; i > -1; i += -1) {
-        wgtr_List_DrawInfo_It it = { 0 };
-        while(wgtr_List_DrawInfo_it_next(&layers.items[i], &it)) {
-            DrawInfo draw = *it.item;
-            wgtr_List_DrawInfo_append(&t->out_draw_list, draw);
-            printfd("(depth %d) Widget right here! :) "Rect2i_Fmt, i, Rect2i_Arg(draw.area));
-        }
-    }
-
-    printfd("This is the end");
-}
-
-/*
-v2f
-v2i
-v3f
-v3i
-*/
-
-/*
-void wguitree_build_end(Wguitree *t) {
-    ++t->frame;
-
-    // For now let's just print the tree.
-    printfd("PRINTING TREE:");
-    wguitree_print_tree(&t->root_node, 0);
-
-    //t->draws_da = wguitree_drawinfo_da_create_with_allocator(arena_allocator, &t->arena);
-    t->layers = wgtr_Vec_Vec_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
-
-    // Let's say I wanna access id 0
-
-    // Ok. Now let's calculate the sizes of each.
-    printfd("Starting size calculation.");
-    {
-        // Let's maybe only save containers in our stack.
-
-        wguitree_stack_da stack = wguitree_stack_da_create_with_allocator(arena_allocator, &t->arena);
-        StackItem *curr_item = NULL;
-
-        StackItem new_item = { // First item.
-            .node = &t->root_node,
-            .child_idx = 0,
-            .area = t->screen,
-        };
-        goto NEW_ITEM;
-
-        NEW_ITEM:
-        {
-            //printfd("[Container type %d area "Rect2i_Fmt"]", new_item.node->container.type, Rect2i_Arg(new_item.area));
-            wguitree_stack_da_append(&stack, new_item);
-        }
-
-        CONTINUE:
-        {
-            curr_item = wguitree_stack_da_get_safe(&stack, stack.size-1);
-            Container *self = &curr_item->node->container;
-            for (; curr_item->child_idx < self->children.size; ++curr_item->child_idx) {
-                printfd(ANSI_MAG"[Container type %d area "Rect2i_Fmt"] child %d/%d", self->type, Rect2i_Arg(curr_item->area), curr_item->child_idx+1, self->children.size);
-                Node *node = &self->children.items[curr_item->child_idx];
-                Rect2i area = wguitree_calculate_area_for_child_n(self->type, curr_item->area, self->children.size, curr_item->child_idx);
-                if (!node->is_container) {
-                    printfd("(i %d) Widget right here! :) "Rect2i_Fmt, curr_item->child_idx, Rect2i_Arg(area));
-
-                    wguitree_drawinfo_da_append(&t->draws_da,
-                    (DrawInfo) {
-                        .area = area,
-                        .widget = node->content
-                    });
-                } else {
-                    ++curr_item->child_idx;
-                    new_item = (StackItem) {
-                        .node = node,
-                        .child_idx = 0,
-                        .area = area,
-                    };
-                    goto NEW_ITEM;
-                }
-            }
-            // Finished with the children. Let's pop and go up.
-            wguitree_stack_da_remove_at(&stack, stack.size-1);
-            if (stack.size > 0) {
-                goto CONTINUE;
-            }
-        }
-    }
-    printfd("It's the end!");
-}
-   */
-
-void wguitree_container_add_child(Wguitree *t, Node *parent_node, Node child_node) {
-    if (!parent_node->is_container) {
-        printfd("WAR: Refusing to add child to non-container node.");
-        return;
-    }
-    Container *parent = &parent_node->container;
-
-    if (parent->children.items == NULL) {
-        parent->children = wguitree_node_da_create_with_allocator(arena_allocator, &t->arena);
-    }
-
-    wguitree_node_da_append(&parent->children, child_node);
-}
-
-#endif

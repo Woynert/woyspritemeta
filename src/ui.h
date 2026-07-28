@@ -9,6 +9,7 @@
 #include "winput.h"
 #include "rlgl.h"
 #include "portable_utils.h"
+#include "./standalone/woyguitree.h"
 
 #define UI_WIDGET_DEFAULT_REQUEST_HANDLER(req) do {            \
     if (req != NULL) {                                             \
@@ -183,11 +184,11 @@ void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, float scale
     ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
 }
 
-void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+void ui_widget_options(Ctx *ctx, DrawInfo info) {
 
-    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
+    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
-    Rect2i area = widget.area;
+    Rect2i area = info.area;
     const int line_height = ctx->draw.line_height;
     int line = 0;
     V2i pos = { 0 };
@@ -199,7 +200,7 @@ void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
     Rect2i line_area = {{ pos.x, pos.y, area.width -pad, line_height }};
     line_area.y += line_height;
 
-    DrawRectangleReci(area, DEFAULT_BG);
+    //DrawRectangleReci(area, DEFAULT_BG);
     ui_draw_text(ctx, cstr_SL("Options:"), pos, DEFAULT_FG);
 
     for (int i = 0; i < ctx->actions.size; ++i)
@@ -207,7 +208,7 @@ void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
         Action *action = &ctx->actions.items[i];
         pos = (V2i) {{ (int)area.x + pad, (int)area.y + line * ctx->draw.line_height }};
 
-        if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), line_area)) {
+        if (CheckCollisionPointReci(GetMousePositioni(), line_area)) {
             DrawRectangleReci(line_area, BLUE);
 
             if (winput_mice_pressed(MouseLeft)) {
@@ -220,6 +221,34 @@ void ui_widget_options(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
         ++line;
         line_area.y += line_height;
     }
+
+    // DELME: Simple example of state mutation.
+
+    if (winput_wheel() > 0) {
+        ++info.state->scroll;
+    }
+    printfd("config %p", (void*)info.state);
+    ui_draw_text(ctx, cstr(TextFormat("%d", info.state->scroll)), area.pos, BLUE);
+    DrawRectangleLinesi(area, MAGENTA, 1);
+
+    // DELME
+}
+
+
+void ui_widget_vsplit(Ctx *ctx, DrawInfo info) {
+
+    Rect2i area = info.area;
+
+    //DrawRectangleReci(area, DEFAULT_BG);
+
+    if (winput_wheel() != 0) {
+        info.state->scroll += (int)winput_wheel();
+    }
+    printfd("vsplit %p", (void*)info.state);
+
+    ui_draw_text(ctx, cstr(TextFormat("%d", info.state->scroll)), v2i_add(area.pos, v2ii(3)), GREEN);
+
+    DrawRectangleLinesi(area, BLUE, 4);
 }
 
 void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
@@ -786,6 +815,7 @@ void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, const int c
     }
 }
 
+/*
 void ui_draw_all(Ctx *ctx) {
 
     // Collect draw functions.
@@ -824,6 +854,7 @@ void ui_draw_all(Ctx *ctx) {
 
     ui__calculate_focus_and_draw_widgets(ctx, widgets, countof(widgets));
 }
+*/
 
 /*
 void ui_split_h(Ctx *ctx, const Rect2i area, int child_count, Widget *children, WidgetContainer *container) {
@@ -903,18 +934,44 @@ void ui_draw_all2(Ctx *ctx) {
 
 
 //#include "./src/standalone/wguitree.h"
-#include "./standalone/woyguitree.h"
 
 
-void widget_v_split(Rect2i area, bool focused, Ctx *ctx, int child_count, Rect2i *children) {
-    DrawRectangleLinesi(area, BLUE, 2);
-
+void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx, wgtr_WidgetState *state) {
+    (void)user_ctx, (void)state;
     for (int i = 0; i < child_count; ++i) {
         Rect2i *child = &children[i];
+        child->width = area.width;
+        child->x = area.x;
         child->height = area.height / child_count;
         child->y = area.y + child->height * i;
     }
 }
+
+// Only two children supported.
+void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, wgtr_WidgetState *state) {
+    float percentage = (float)(state->scroll + 20) / 100.f;
+    (void)user_ctx;
+
+    if (child_count > 0) {
+        Rect2i *child = &children[0];
+        child->width = area.width;
+        child->x = area.x;
+        child->height = (int)((float)area.height * percentage);
+        child->y = area.y;
+    }
+    if (child_count > 1) {
+        Rect2i *child = &children[1];
+        child->width = area.width;
+        child->x = area.x;
+        child->height = (int)((float)area.height * (1.0f - percentage));
+        child->y = area.y + children[0].height;
+    }
+    children[0] = Rect2i_add_padding_all(children[0], 2);
+    children[1] = Rect2i_add_padding_all(children[1], 2);
+    // Ignore any other chilren. But actually we should like fit them all or print a warning.
+}
+
+
 
 
 void widget_simple_text(Rect2i area, bool focused, Ctx *ctx, int child_count, Rect2i *children) {
@@ -923,7 +980,35 @@ void widget_simple_text(Rect2i area, bool focused, Ctx *ctx, int child_count, Re
     ui_draw_text(ctx, cstr_SL("HELLO"), area.pos, RED);
 }
 
+#define ITEM__TABLE \
+X( ITEM_ID_AIR        , ITEM_TYPE_SYMBOL, "Air"         , 0 , 0  , "005.png" ) \
+X( ITEM_ID_STONE      , ITEM_TYPE_BLOCK , "Stone"       , 16, 0  , "001.png" ) \
+X( ITEM_ID_WOOD       , ITEM_TYPE_SYMBOL, "Wood"        , 16, 0  , "002.png" ) \
+X( ITEM_ID_COAL       , ITEM_TYPE_SYMBOL, "Coal"        , 16, 0  , "003.png" ) \
+X( ITEM_ID_STONE_AXE  , ITEM_TYPE_MELEE , "Stone Axe"   , 1 , 100, "004.png" ) \
+X( ITEM_ID_STONE_SPEAR, ITEM_TYPE_MELEE , "Stone Spear" , 1 , 100, "005.png" ) \
+X( ITEM_ID_CAMPFIRE   , ITEM_TYPE_BLOCK , "Campfire"    , 5 , 0  , "009.png" )
 
+
+#define WIDGET__TABLE \
+X( UI_WIDGET_OPTIONS    , ui_widget_options ) \
+X( UI_WIDGET_SPRITE_LIST, ui_widget_options ) \
+X( UI_WIDGET_VSPLIT     , ui_widget_vsplit  )
+
+enum UI_WIDGET {
+    #define X(A, ...) A,
+    WIDGET__TABLE
+    #undef X
+    UI_WIDGET_AMOUNT
+};
+
+// ↓↓↓ Maps UI_WIDGET to function pointer.
+
+void (*widget_func[]) (Ctx *ctx, DrawInfo info) = {
+    #define X(A, B) B,
+    WIDGET__TABLE
+    #undef X
+};
 
 
 void ui_draw_all3(Ctx *ctx) {
@@ -939,31 +1024,45 @@ void ui_draw_all3(Ctx *ctx) {
 
     Node con_tree = {
         .is_container = true,
-        .container.type = ContainerRoot,
+        .container_func = widget_vlist,
     };
 
     // Add split.
     Node con_vlist = {
         .is_container = true,
-        .container.type = ContainerListV,
-        .container.identifier = cstr_SL("MAIN_V_LIST"),
+        .identifier = cstr_SL("MAIN_V_LIST"),
+        .container_func = widget_vlist,
     };
 
     {
-        Node widget_config = { .content.draw_func = ui_widget_options };
+        Node widget_config = {
+            .has_user_draw_func = true,
+            .user_draw_func_id = UI_WIDGET_OPTIONS
+        };
         wguitree_container_add_child(&guitree, &con_vlist, widget_config);
     }
 
+    //if (ctx->ticks % 2 == 0) {
     {
         Node con_hlist = {
             .is_container = true,
-            .container.type = ContainerListH,
-            .container.identifier = cstr_SL("SECONDARY_H_LIST"),
+            .identifier = cstr_SL("SECONDARY_H_SPLIT"),
+            .container_func = widget_vsplit,
+            .has_user_draw_func = true,
+            .user_draw_func_id = UI_WIDGET_VSPLIT,
         };
 
         {
-            Node widget_sprite_list = { .content.draw_func = ui_widget_sprite_list };
+            Node widget_sprite_list = {
+                .has_user_draw_func = true,
+                .user_draw_func_id = UI_WIDGET_SPRITE_LIST
+            };
             wguitree_container_add_child(&guitree, &con_hlist, widget_sprite_list);
+            widget_sprite_list = (Node) {
+                .has_user_draw_func = true,
+                .user_draw_func_id = UI_WIDGET_SPRITE_LIST
+            };
+
             wguitree_container_add_child(&guitree, &con_hlist, widget_sprite_list);
         }
 
@@ -971,7 +1070,10 @@ void ui_draw_all3(Ctx *ctx) {
     }
 
     {
-        Node widget_config = { .content.draw_func = ui_widget_options };
+        Node widget_config = {
+            .has_user_draw_func = true,
+            .user_draw_func_id = UI_WIDGET_OPTIONS
+        };
         wguitree_container_add_child(&guitree, &con_vlist, widget_config);
     }
 
@@ -983,8 +1085,9 @@ void ui_draw_all3(Ctx *ctx) {
     wgtr_List_DrawInfo_It it = { 0 };
     while(wgtr_List_DrawInfo_it_next(&guitree.out_draw_list, &it)) {
         DrawInfo draw = *it.item;
-        printfd("(user space) Widget right here! :) "Rect2i_Fmt, Rect2i_Arg(draw.area));
-        //draw.widget.draw_func(ctx, 
+        printfd("(user space) Widget right here! :) "Rect2i_Fmt" user_fun_id %d,", Rect2i_Arg(draw.area), draw.user_draw_func_id);
+
+        widget_func[it.item->user_draw_func_id](ctx, draw);
     }
 
     printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (guitree.arena.end - guitree.arena.beg)), PRIbytearg(1 << 20));
