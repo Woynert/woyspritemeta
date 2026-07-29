@@ -130,7 +130,7 @@ void wguitree_build_start(Wguitree *t, Rect2i screen) {
     strpool_create_with_allocator(&t->strpool, arena_allocator, &t->arena);
 }
 
-void wguitree_print_tree(Node *node, int level) {
+void wguitree_print_tree(Wguitree *t, Node *node, int level) {
     for (int i = 0; i < level; ++i) {
         printf("   ");
     }
@@ -142,13 +142,14 @@ void wguitree_print_tree(Node *node, int level) {
     }
 
     printf(" type:%d", node->container.type);
-    //if (node->identifier.size > 0) {
-        //printf(" id:%"PRIstr, PRIstrarg(node->identifier));
-    //}
+    strview_t identifier = strpool_get(&t->strpool, node->identifier_strpool_id);
+    if (identifier.size > 0) {
+        printf(" id:%"PRIstr, PRIstrarg(identifier));
+    }
     printf("\n");
 
     for (int i = 0; i < node->container.children.size; ++i) {
-        wguitree_print_tree(&node->container.children.items[i], level+1);
+        wguitree_print_tree(t, &node->container.children.items[i], level+1);
     }
 }
 
@@ -248,7 +249,7 @@ void wguitree_build_end(Wguitree *t) {
 
     // For now let's just print the tree.
     printfd("PRINTING TREE:");
-    wguitree_print_tree(&t->root_node, 0);
+    wguitree_print_tree(t, &t->root_node, 0);
 
     //t->draws_da = wguitree_drawinfo_da_create_with_allocator(arena_allocator, &t->arena);
     //t->layers = wgtr_Vec_Vec_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
@@ -299,12 +300,11 @@ void wguitree_build_end(Wguitree *t) {
         CONTINUE:
         {
             StackItem *curr_item = wguitree_stack_da_get_safe(&stack, stack.size-1);
-            Node *self = curr_item->node;
+            Node *parent = curr_item->node;
 
+            for (; curr_item->child_idx < parent->container.children.size; ++curr_item->child_idx) {
 
-            for (; curr_item->child_idx < self->container.children.size; ++curr_item->child_idx) {
-                //printfd(ANSI_MAG"[Container type %d area "Rect2i_Fmt"] child %d/%d", self->container.type, Rect2i_Arg(curr_item->area), curr_item->child_idx+1, self->children.size);
-                Node *node = &self->container.children.items[curr_item->child_idx];
+                Node *node = &parent->container.children.items[curr_item->child_idx];
 
                 if (node->has_user_draw_func) {
 
@@ -316,9 +316,9 @@ void wguitree_build_end(Wguitree *t) {
                         wgtr_Vec_List_DrawInfo_append(&layers, new_layer);
                     }
                     wgtr_List_DrawInfo *draw_layer = &layers.items[depth];
-                    strview_t identifier = strpool_get(&t->strpool, new_item.node->identifier_strpool_id);
+                    strview_t identifier = strpool_get(&t->strpool, node->identifier_strpool_id);
 
-                    printfd("(i %d) Widget right here! :) id (%"PRIstr") "Rect2i_Fmt, curr_item->child_idx, PRIstrarg(identifier), Rect2i_Arg(node->_area));
+                    printfd("(i %d) Widget right here! :) id (%d) (%"PRIstr") "Rect2i_Fmt, curr_item->child_idx, node->identifier_strpool_id, PRIstrarg(identifier), Rect2i_Arg(node->_area));
 
                     // Check if we have state for this one.
                     wgtr_WidgetState *state = wguitree__try_get_saved_state(t, identifier);
