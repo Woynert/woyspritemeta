@@ -2,6 +2,7 @@
 #define UI
 
 #include "operations.h"
+#include "raylib_drawbuffer.h"
 #include "raylib_extra.h"
 #include "la_extra.h"
 #include "raylib.h"
@@ -33,6 +34,11 @@ void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, int count);
 
 void ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
     DrawTextEx_strview_i(ctx->draw.font, str, pos, ctx->draw.font_size,
+        ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
+}
+
+void drawbuf_ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
+    drawbuf_DrawTextEx(ctx->draw.font, str, pos, ctx->draw.font_size,
         ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
 }
 
@@ -189,6 +195,7 @@ void ui_widget_options(Ctx *ctx, DrawInfo info) {
     //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     Rect2i area = info.area;
+    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), area);
     const int line_height = ctx->draw.line_height;
     int line = 0;
     V2i pos = { 0 };
@@ -200,23 +207,23 @@ void ui_widget_options(Ctx *ctx, DrawInfo info) {
     Rect2i line_area = {{ pos.x, pos.y, area.width -pad, line_height }};
     line_area.y += line_height;
 
-    //DrawRectangleReci(area, DEFAULT_BG);
-    ui_draw_text(ctx, cstr_SL("Options:"), pos, DEFAULT_FG);
+    drawbuf_DrawRectangle(area, DEFAULT_BG);
+    drawbuf_ui_draw_text(ctx, cstr_SL("Options:"), pos, DEFAULT_FG);
 
     for (int i = 0; i < ctx->actions.size; ++i)
     {
         Action *action = &ctx->actions.items[i];
         pos = (V2i) {{ (int)area.x + pad, (int)area.y + line * ctx->draw.line_height }};
 
-        if (CheckCollisionPointReci(GetMousePositioni(), line_area)) {
-            DrawRectangleReci(line_area, BLUE);
+        if (mouse_focus && CheckCollisionPointReci(GetMousePositioni(), line_area)) {
+            drawbuf_DrawRectangle(line_area, BLUE);
 
             if (winput_mice_pressed(MouseLeft)) {
                 call_action(ctx, action);
             }
         }
 
-        ui_draw_text(ctx, strbuf_view2(action->name), pos, DEFAULT_FG);
+        drawbuf_ui_draw_text(ctx, strbuf_view2(action->name), pos, DEFAULT_FG);
 
         ++line;
         line_area.y += line_height;
@@ -227,9 +234,9 @@ void ui_widget_options(Ctx *ctx, DrawInfo info) {
     if (winput_wheel() > 0) {
         ++info.state->scroll;
     }
-    printfd("config %p", (void*)info.state);
+
     ui_draw_text(ctx, cstr(TextFormat("%d", info.state->scroll)), area.pos, BLUE);
-    DrawRectangleLinesi(area, MAGENTA, 1);
+    drawbuf_DrawRectangleLines(area, MAGENTA, 1);
 
     // DELME
 }
@@ -239,16 +246,51 @@ void ui_widget_vsplit(Ctx *ctx, DrawInfo info) {
 
     Rect2i area = info.area;
 
-    //DrawRectangleReci(area, DEFAULT_BG);
+    drawbuf_DrawRectangle(area, DEFAULT_BG);
 
     if (winput_wheel() != 0) {
-        info.state->scroll += (int)winput_wheel();
+        info.state->scroll -= int_sign((int)winput_wheel()) * 3;
+        info.state->scroll = int_clamp(-40, 40, info.state->scroll);
+        // ↑↑↑ This ensures at least 10% is visible at minimum.
     }
-    printfd("vsplit %p", (void*)info.state);
 
-    ui_draw_text(ctx, cstr(TextFormat("%d", info.state->scroll)), v2i_add(area.pos, v2ii(3)), GREEN);
+    drawbuf_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->scroll)), v2i_add(area.pos, v2ii(3)), GREEN);
 
-    DrawRectangleLinesi(area, BLUE, 4);
+    drawbuf_DrawRectangleLines(area, BLUE, 8);
+}
+
+void ui_widget_vsplit_drag(Ctx *ctx, DrawInfo info) {
+
+    Rect2i area = info.area;
+    Rect2i drag_area = info.state->rect_a;
+    int *is_dragging = &info.state->int_b;
+
+    drawbuf_DrawRectangle(area, DEFAULT_BG);
+
+    if (CheckCollisionPointReci(GetMousePositioni(), drag_area) || *is_dragging) {
+        drawbuf_DrawRectangle(drag_area, ORANGE);
+        if (winput_mice_pressed(MouseLeft)) {
+            *is_dragging = true;
+        }
+    }
+
+    if (*is_dragging) {
+
+        int mouse_y = GetMousePositioni().y;
+        float factor = ((float)mouse_y - ((float)area.y + (float)area.height / 2.0f)) / (float)area.height;
+        printfd("FACTOR %f", factor);
+        info.state->scroll = (int)(factor * 100.0f);
+        info.state->scroll = int_clamp(-40, 40, info.state->scroll);
+        // ↑↑↑ This ensures at least 10% is visible at minimum.
+
+        if (winput_mice_released(MouseLeft)) {
+            *is_dragging = false;
+        }
+    }
+
+    drawbuf_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->scroll)), v2i_add(area.pos, v2ii(3)), GREEN);
+
+    //drawbuf_DrawRectangleLines(area, BLUE, 8);
 }
 
 void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
@@ -949,7 +991,8 @@ void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx
 
 // Only two children supported.
 void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, wgtr_WidgetState *state) {
-    float percentage = (float)(state->scroll + 20) / 100.f;
+    const int pad = 2;
+    float percentage = (float)(state->scroll + 50) / 100.f;
     (void)user_ctx;
 
     if (child_count > 0) {
@@ -966,9 +1009,18 @@ void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ct
         child->height = (int)((float)area.height * (1.0f - percentage));
         child->y = area.y + children[0].height;
     }
-    children[0] = Rect2i_add_padding_all(children[0], 2);
-    children[1] = Rect2i_add_padding_all(children[1], 2);
-    // Ignore any other chilren. But actually we should like fit them all or print a warning.
+    children[0] = Rect2i_add_padding_all(children[0], pad);
+    children[1] = Rect2i_add_padding_all(children[1], pad);
+
+    // This rect will be used for dragging.
+    state->rect_a = (Rect2i) {
+        .x      = children[0].x,
+        .width  = children[0].width,
+        .y      = children[0].y + children[0].height,
+        .height = pad * 2,
+    };
+
+    if (child_count > 2) { printfd("WAR: Too many children."); }
 }
 
 
@@ -980,20 +1032,12 @@ void widget_simple_text(Rect2i area, bool focused, Ctx *ctx, int child_count, Re
     ui_draw_text(ctx, cstr_SL("HELLO"), area.pos, RED);
 }
 
-#define ITEM__TABLE \
-X( ITEM_ID_AIR        , ITEM_TYPE_SYMBOL, "Air"         , 0 , 0  , "005.png" ) \
-X( ITEM_ID_STONE      , ITEM_TYPE_BLOCK , "Stone"       , 16, 0  , "001.png" ) \
-X( ITEM_ID_WOOD       , ITEM_TYPE_SYMBOL, "Wood"        , 16, 0  , "002.png" ) \
-X( ITEM_ID_COAL       , ITEM_TYPE_SYMBOL, "Coal"        , 16, 0  , "003.png" ) \
-X( ITEM_ID_STONE_AXE  , ITEM_TYPE_MELEE , "Stone Axe"   , 1 , 100, "004.png" ) \
-X( ITEM_ID_STONE_SPEAR, ITEM_TYPE_MELEE , "Stone Spear" , 1 , 100, "005.png" ) \
-X( ITEM_ID_CAMPFIRE   , ITEM_TYPE_BLOCK , "Campfire"    , 5 , 0  , "009.png" )
-
 
 #define WIDGET__TABLE \
-X( UI_WIDGET_OPTIONS    , ui_widget_options ) \
-X( UI_WIDGET_SPRITE_LIST, ui_widget_options ) \
-X( UI_WIDGET_VSPLIT     , ui_widget_vsplit  )
+X( UI_WIDGET_OPTIONS    , ui_widget_options      ) \
+X( UI_WIDGET_SPRITE_LIST, ui_widget_options      ) \
+X( UI_WIDGET_VSPLIT     , ui_widget_vsplit       ) \
+X( UI_WIDGET_VSPLIT_DRAG, ui_widget_vsplit_drag  )
 
 enum UI_WIDGET {
     #define X(A, ...) A,
@@ -1013,93 +1057,60 @@ void (*widget_func[]) (Ctx *ctx, DrawInfo info) = {
 
 void ui_draw_all3(Ctx *ctx) {
 
-    static Wguitree guitree = { 0 };
+    static Wguitree tree = { 0 };
     static bool setup = false;
     if (!setup) {
         setup = true;
-        wguitree_create(&guitree);
+        wguitree_create(&tree);
     }
 
-    wguitree_build_start(&guitree, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()+1}});
+    wguitree_build_start(&tree, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()+1}});
 
-    Node con_tree = {
-        .is_container = true,
-        .container_func = widget_vlist,
-    };
+    Node con_tree = guitree_dumb_container(&tree, cstr_SL(""), widget_vlist);
 
-    // Add split.
-    Node con_vlist = {
-        .is_container = true,
-        .identifier = cstr_SL("MAIN_V_LIST"),
-        .container_func = widget_vlist,
-    };
+    Node con_vlist = guitree_dumb_container(&tree, cstr_SL("MAIN_V_LIST"), widget_vlist);
 
     {
-        Node widget_config = {
-            .has_user_draw_func = true,
-            .user_draw_func_id = UI_WIDGET_OPTIONS
-        };
-        wguitree_container_add_child(&guitree, &con_vlist, widget_config);
+        Node widget_config = guitree_widget(UI_WIDGET_OPTIONS);
+        guitree_container_add_child(&tree, &con_vlist, widget_config);
     }
 
-    //if (ctx->ticks % 2 == 0) {
     {
-        Node con_hlist = {
-            .is_container = true,
-            .identifier = cstr_SL("SECONDARY_H_SPLIT"),
-            .container_func = widget_vsplit,
-            .has_user_draw_func = true,
-            .user_draw_func_id = UI_WIDGET_VSPLIT,
-        };
+        Node con_hlist = guitree_container(&tree, cstr_SL("SECONDARY_H_SPLIT"),
+                widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
 
         {
-            Node widget_sprite_list = {
-                .has_user_draw_func = true,
-                .user_draw_func_id = UI_WIDGET_SPRITE_LIST
-            };
-            wguitree_container_add_child(&guitree, &con_hlist, widget_sprite_list);
-            widget_sprite_list = (Node) {
-                .has_user_draw_func = true,
-                .user_draw_func_id = UI_WIDGET_SPRITE_LIST
-            };
+            Node widget_sprite_list = guitree_widget(UI_WIDGET_SPRITE_LIST);
+            guitree_container_add_child(&tree, &con_hlist, widget_sprite_list);
 
-            wguitree_container_add_child(&guitree, &con_hlist, widget_sprite_list);
+            widget_sprite_list = guitree_widget(UI_WIDGET_SPRITE_LIST);
+            guitree_container_add_child(&tree, &con_hlist, widget_sprite_list);
         }
 
-        wguitree_container_add_child(&guitree, &con_vlist, con_hlist);
+        guitree_container_add_child(&tree, &con_vlist, con_hlist);
     }
 
     {
-        Node widget_config = {
-            .has_user_draw_func = true,
-            .user_draw_func_id = UI_WIDGET_OPTIONS
-        };
-        wguitree_container_add_child(&guitree, &con_vlist, widget_config);
+        Node widget_config = guitree_widget(UI_WIDGET_OPTIONS);
+        guitree_container_add_child(&tree, &con_vlist, widget_config);
     }
 
-    wguitree_container_add_child(&guitree, &con_tree, con_vlist);
+    guitree_container_add_child(&tree, &con_tree, con_vlist);
 
-    guitree.root_node = con_tree;
-    wguitree_build_end(&guitree);
+    tree.root_node = con_tree;
+    wguitree_build_end(&tree);
 
     wgtr_List_DrawInfo_It it = { 0 };
-    while(wgtr_List_DrawInfo_it_next(&guitree.out_draw_list, &it)) {
+    while(wgtr_List_DrawInfo_it_next(&tree.out_draw_list, &it)) {
         DrawInfo draw = *it.item;
+        drawbuf_set_layer((uint8_t)draw.layer);
         printfd("(user space) Widget right here! :) "Rect2i_Fmt" user_fun_id %d,", Rect2i_Arg(draw.area), draw.user_draw_func_id);
 
         widget_func[it.item->user_draw_func_id](ctx, draw);
     }
+    drawbuf_draw_all();
 
-    printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (guitree.arena.end - guitree.arena.beg)), PRIbytearg(1 << 20));
-
-
-    /*
-       for widget in Widgets:
-            widget.draw(has_focus, etc, ...);
-    */
-
-    //RLGL.State.curren
-    //RLGL.currentBatch->currentDepth += (1.0f/20000.0f);
+    printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (tree.arena.end - tree.arena.beg)), PRIbytearg(1 << 20));
 }
 
 #endif // !UI

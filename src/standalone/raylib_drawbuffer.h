@@ -90,8 +90,9 @@ void drawbuf_DrawRectangleLines(Rect2i r, Color color, int thickness) {
 
 void drawbuf_DrawTextEx(Font font, const strview_t string, V2i pos, int font_size, int spacing, int textLineSpacing, Color tint) {
     DrawLayer *layer = &DrawBuf.layers[DrawBuf__currlayer];
-    drawbuf_t_DrawTextEx *args = arenady_new(&layer->arena, drawbuf_t_DrawTextEx, 1);
-    arenady_new(&layer->arena, char, string.size);
+    // Allocate struct + size in one call.
+    drawbuf_t_DrawTextEx *args = (drawbuf_t_DrawTextEx *)
+        arenady_alloc(&layer->arena, (i64)(sizeof(drawbuf_t_DrawTextEx) + (size_t)string.size), _Alignof(drawbuf_t_DrawTextEx), 1);
     args->font = font;
     args->position = pos;
     args->font_size = font_size;
@@ -103,10 +104,6 @@ void drawbuf_DrawTextEx(Font font, const strview_t string, V2i pos, int font_siz
     DrawCmd_da_append(&layer->commands, DRAWCMD_TEXT_EX);
 }
 
-void drawbuf__rectangle(DrawLayer *layer) {
-    drawbuf_t_DrawRectangle *args = arenady_new(&layer->arena, drawbuf_t_DrawRectangle, 1);
-    DrawRectangleReci(args->r, args->color);
-}
 
 
 void drawbuf_draw_all(void) {

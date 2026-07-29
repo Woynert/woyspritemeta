@@ -21,6 +21,8 @@ typedef enum {
 
 typedef struct wgtr_WidgetState {
     int scroll;
+    int int_b;
+    Rect2i rect_a;
     int __last_frame; // Used to determine if we should persist it or forget it.
 } wgtr_WidgetState;
 
@@ -37,6 +39,7 @@ typedef struct DrawInfo {
     bool     container_layout_request; // Only true, if this widget is marked as a Container.
     int      child_count;
     Rect2i **out_children;
+    int layer;
 } DrawInfo;
 
 #define LIST__TYPE DrawInfo
@@ -52,13 +55,16 @@ typedef struct DrawInfo {
 #define DYNA__ONLY_HEADER
 #include "da.h"
 
+typedef void (wgtr_ContainerFunc)(Rect2i area, int child_count, Rect2i *children, void *user_ctx, wgtr_WidgetState *state);
 
 typedef struct Node {
-    strview_t identifier;    // It's OK if a widget has no identifier. It's state won't persist thru frames.
+    //strview_t identifier;    // It's OK if a widget has no identifier. It's state won't persist thru frames.
+    int identifier_strpool_id;
+
     bool has_user_draw_func;  // User must check this, if adding an user_function_id.
     int user_draw_func_id;    // An id for the user to identify which function to call.
 
-    void (*container_func)(Rect2i area, int child_count, Rect2i *children, void *user_ctx, wgtr_WidgetState *state);
+    wgtr_ContainerFunc *container_func;
 
     bool is_container;
     struct {
@@ -78,6 +84,7 @@ typedef struct Node {
 typedef struct Wguitree {
     ArenaRoot arenaroot;
     Arena arena;
+    strpool strpool; // For temporarily storing Nodes' identifiers.
 
     /*
     Each state has an "int frame;" member. If we find this title on
@@ -120,6 +127,7 @@ void wguitree_free(Wguitree *t) {
 void wguitree_build_start(Wguitree *t, Rect2i screen) {
     t->arena = ArenaRoot_get_arena(t->arenaroot);
     t->screen = screen;
+    strpool_create_with_allocator(&t->strpool, arena_allocator, &t->arena);
 }
 
 void wguitree_print_tree(Node *node, int level) {
@@ -134,9 +142,9 @@ void wguitree_print_tree(Node *node, int level) {
     }
 
     printf(" type:%d", node->container.type);
-    if (node->identifier.size > 0) {
-        printf(" id:%"PRIstr, PRIstrarg(node->identifier));
-    }
+    //if (node->identifier.size > 0) {
+        //printf(" id:%"PRIstr, PRIstrarg(node->identifier));
+    //}
     printf("\n");
 
     for (int i = 0; i < node->container.children.size; ++i) {
@@ -273,15 +281,15 @@ void wguitree_build_end(Wguitree *t) {
                 Arena arena_tmp = t->arena;
                 Rect2i *children_areas = arena_new(&arena_tmp, Rect2i, new_item.node->container.children.size);
                 if (new_item.node->container_func != NULL) {
-                    wgtr_WidgetState *state = wguitree__try_get_saved_state(t, new_item.node->identifier);
-                    wguitree__try_get_saved_state(t, new_item.node->identifier);
+                    strview_t identifier = strpool_get(&t->strpool, new_item.node->identifier_strpool_id);
+                    wgtr_WidgetState *state = wguitree__try_get_saved_state(t, identifier);
                     state = state ? state : &t->state_non_persistent;
                     new_item.node->container_func(new_item.node->_area, new_item.node->container.children.size, children_areas, new_item.node->container.user_ctx, state);
                     for (int i = 0; i < new_item.node->container.children.size; ++i) {
                         new_item.node->container.children.items[i]._area = children_areas[i];
                     }
                 } else {
-                    printfd("ERROR: Container (%"PRIstr") has no 'container_function'.", PRIstrarg(new_item.node->identifier));
+                    printfd("ERROR: Container has no 'container_function'.");
                 }
             }
 
@@ -308,19 +316,18 @@ void wguitree_build_end(Wguitree *t) {
                         wgtr_Vec_List_DrawInfo_append(&layers, new_layer);
                     }
                     wgtr_List_DrawInfo *draw_layer = &layers.items[depth];
+                    strview_t identifier = strpool_get(&t->strpool, new_item.node->identifier_strpool_id);
 
-                    printfd("(i %d) Widget right here! :) id (%"PRIstr") "Rect2i_Fmt, curr_item->child_idx, PRIstrarg(node->identifier), Rect2i_Arg(node->_area));
+                    printfd("(i %d) Widget right here! :) id (%"PRIstr") "Rect2i_Fmt, curr_item->child_idx, PRIstrarg(identifier), Rect2i_Arg(node->_area));
 
                     // Check if we have state for this one.
-                    wgtr_WidgetState *state = wguitree__try_get_saved_state(t, node->identifier);
+                    wgtr_WidgetState *state = wguitree__try_get_saved_state(t, identifier);
                     state = state ? state : &t->state_non_persistent;
                     DrawInfo draw_info = {
                         .user_draw_func_id = node->user_draw_func_id,
                         .area = node->_area,
                         .state = state,
-                        //.container_layout_request = false,
-                        //.child_count = 0,
-                        //.out_children = NULL
+                        .layer = depth,
                     };
 
                     wgtr_List_DrawInfo_append(draw_layer, draw_info);
@@ -364,10 +371,45 @@ void wguitree_build_end(Wguitree *t) {
     t->state_non_persistent = (wgtr_WidgetState) { 0 };
 
     printfd("This is the end");
+
+}
+
+Node guitree_dumb_container(Wguitree *t, strview_t id, wgtr_ContainerFunc *cont_func) {
+    int str_id = -1;
+    if (id.size > 0 && id.data != NULL) {
+        str_id = strpool_append(&t->strpool, id);
+    }
+    return (Node) {
+        .identifier_strpool_id = str_id,
+        .is_container = true,
+        .container_func = cont_func,
+    };
+}
+
+Node guitree_container(Wguitree *t, strview_t id, wgtr_ContainerFunc *cont_func, int user_draw_func_id) {
+    int str_id = -1;
+    if (id.size > 0 && id.data != NULL) {
+        str_id = strpool_append(&t->strpool, id);
+    }
+    return (Node) {
+        .identifier_strpool_id = str_id,
+        .is_container = true,
+        .container_func = cont_func,
+        .has_user_draw_func = true,
+        .user_draw_func_id = user_draw_func_id,
+    };
+}
+
+Node guitree_widget(int user_draw_func_id) {
+    return (Node) {
+        .identifier_strpool_id = -1,
+        .has_user_draw_func = true,
+        .user_draw_func_id = user_draw_func_id,
+    };
 }
 
 
-void wguitree_container_add_child(Wguitree *t, Node *parent_node, Node child_node) {
+void guitree_container_add_child(Wguitree *t, Node *parent_node, Node child_node) {
     if (!parent_node->is_container) {
         printfd("WAR: Refusing to add child to non-container node.");
         return;
@@ -381,134 +423,3 @@ void wguitree_container_add_child(Wguitree *t, Node *parent_node, Node child_nod
 }
 
 #endif
-
-/* @Todo: Find state that corresponds to this widget.
-    @How? It is clear this node has no identifier. So, what
-    should we do in this scenario? That is solved by asigning
-    random identifiers if one is not supplied.
-
-    But how can you identify the same node through cycles? If you
-    do for example an ID that starts in zero and then upwards you might
-    miss identify it. The only way it seems it's to provide identifiers
-    manually. Same issue would happen if you make and ID based on the
-    hierarchy example: "root>split_v>widget1" ← That wouldn't work.
-
-    Questions to answer:
-    * Q: What if I want to have a custom split_v and draw the children myself?
-    * A: Maybe provide an API to register your own stuff???
-    * Q: What if I want a split that can be manually adjusted?
-    * A: Maybe some API like:
-
-        register_container(container_draw);
-
-        void container_draw(source area, int child_count, DrawInfo *children) {
-        }
-
-    * Q: Why the separation between Containers and Widgets?
-    * A: Well the idea is to be able to build the entire tree declaratively and
-    then at the end draw it. So there has to be two steps and for now I have
-    hardcoded the available containers. But that's right that maybe a container
-    is just another type of widget... But it shouldn't be responsible for
-    drawing it's own children I think... So two steps are required, a
-    build step, and a draw/process/logic step. Currently containers only have a
-    build step but no draw step, and Widgets have (almost) no build step, but
-    have a draw step. So a "true" node would require those two things.
-
-    * Q: If I make a custom container, where can I set the children's positions?
-    * A: I guess you would modify it during draw step but during build step it
-    would be fixed to the last value you set.
-
-    Plan: Unify Containers and Widgets into one. A Node can be marked as a
-    container and if so it will receive a populated array of children's
-    positions that it can modify every frame. It would be a reference that then
-    will be used for drawing further nodes down the tree.
-
-    So, the only job of a "Widget" now is to 1. Draw itself and 2. If it's a
-    container then modify it's childrens positions accordingly on however it
-    wants to. Example:
-
-        void widget_v_split(Rect2i area, bool focused, void *user_ctx, int child_count, Rect2i **children) {
-            DrawRectangle(area, GRAY);
-
-            for (int i = 0; i < child_count; ++i) {
-                Rec2i *child = &children[i];
-                child->height = area.height / child_count;
-                child->y = area.y + child->height * i;
-            }
-        }
-
-        void widget_v_split_adjustable(Rect2i area, bool focused, void *user_ctx, int child_count, Rect2i **children) {
-            DrawRectangle(area, GRAY);
-            DrawText(area.pos, (user_ctx as Ctx)->title);
-
-            if (mouse_relase(LEFT)) {
-                node_state->is_draggin == false;
-            }
-            if (focused) {
-                if (mouse_press(LEFT)) {
-                    node_state->is_draggin == true;
-                }
-                if (node_state.is_draggin) {
-                    node_state->percentage = clamp(0, (mouse.x - area.x) / area.width, 1);
-                }
-            }
-
-            Rec2i *left = &children[0];
-            Rec2i *right = &children[1];
-            *left = (Rect2) { .width = node_state->percentage * area.width, ... };
-            *right = (Rect2) { .width = (1 - node_state->percentage) * area.width, ... };
-        }
-
-    Note: The focused argument doesn't really mean what you think it does.
-    I think that solves the issue about the custom containers.
-    And the issue about determining the current widget which has "focus" is a
-    matter of checking the mouse against the last tree. So no problem there.
-
-    Final problem: Q: How to solve the ID problem? Should we enforce the user to
-    always provide and ID? Or maybe there is some way to this automagically? In
-    a way that is reliable? Or what about this: What about if there is no ID set
-    then you will through node_state a reference to a zerod state and that state
-    won't persist. The only way for it to persist is if you set and ID. If it
-    notices that you did modify it then it prints a warning about: "Modified 
-    state of Node without ID. Please provide an ID if you want state to persist".
-
-    Problem: What about containers created through an iterator? They can't have
-    compile time constant ids. Well I think you can create a custom id very
-    easily like:
-
-        char id[20];
-        sprintf(id, "mimos%d", i);
-
-    Yeah but it requires sprintf which is like super slow, also this feels like
-    an overkill. You could just convert your numeric i into a thing.... I have
-    an idea: Why don't we use a combination of both: An automatically
-    set increasing id and the function pointer to identify them?. Because the
-    only thing that differentiates Nodes is their function and their context.
-    It could even be something like: Tree depth + Auto id + Function pointer.
-
-    Here is a improvement over the counter id idea:
-
-        for (int i = 0; i < 10; ++i) {
-            Node con_hlist = {
-                .is_container = true,
-                .container.type = ContainerListH,
-                .container.identifier = make_id("MIMO", i),
-            };
-        }
-
-    make_id would be a macro/function that just append the i into the prefix.
-    Problem solved right?
-
-    Furthermore the node_state could actually be an arena from where you can
-    get your state from. Consider:
-
-        void draw_split_v_container(...) {
-            float percentage = node_state_get_float(node_state);
-            bool is_clicked = node_state_get_bool(node_state);
-        }
-
-    Problem: Consume inputs front-to-back when the tree is drawn back-to-front.
-
-    There is a solution to this but the problem is that it would introduce a
-    delay of one frame and I'm not sure if I want that.
-*/
