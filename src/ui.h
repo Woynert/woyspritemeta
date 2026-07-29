@@ -10,7 +10,7 @@
 #include "winput.h"
 #include "rlgl.h"
 #include "portable_utils.h"
-#include "./standalone/woyguitree.h"
+#include "./standalone/uitree.h"
 
 #define UI_WIDGET_DEFAULT_REQUEST_HANDLER(req) do {            \
     if (req != NULL) {                                             \
@@ -190,7 +190,7 @@ void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, float scale
     ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
 }
 
-void ui_widget_options(Ctx *ctx, DrawInfo info) {
+void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
 
     //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
@@ -242,7 +242,7 @@ void ui_widget_options(Ctx *ctx, DrawInfo info) {
 }
 
 
-void ui_widget_vsplit(Ctx *ctx, DrawInfo info) {
+void ui_widget_vsplit(Ctx *ctx, uitree_DrawInfo info) {
 
     Rect2i area = info.area;
 
@@ -259,7 +259,7 @@ void ui_widget_vsplit(Ctx *ctx, DrawInfo info) {
     drawbuf_DrawRectangleLines(area, BLUE, 8);
 }
 
-void ui_widget_vsplit_drag(Ctx *ctx, DrawInfo info) {
+void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
 
     Rect2i area = info.area;
     Rect2i drag_area = info.state->rect_a;
@@ -975,10 +975,10 @@ void ui_draw_all2(Ctx *ctx) {
 */
 
 
-//#include "./src/standalone/wguitree.h"
+//#include "./src/standalone/uitree.h"
 
 
-void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx, wgtr_WidgetState *state) {
+void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
     (void)user_ctx, (void)state;
     for (int i = 0; i < child_count; ++i) {
         Rect2i *child = &children[i];
@@ -990,7 +990,7 @@ void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx
 }
 
 // Only two children supported.
-void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, wgtr_WidgetState *state) {
+void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
     const int pad = 2;
     float percentage = (float)(state->scroll + 50) / 100.f;
     (void)user_ctx;
@@ -1048,7 +1048,7 @@ enum UI_WIDGET {
 
 // ↓↓↓ Maps UI_WIDGET to function pointer.
 
-void (*widget_func[]) (Ctx *ctx, DrawInfo info) = {
+void (*widget_func[]) (Ctx *ctx, uitree_DrawInfo info) = {
     #define X(A, B) B,
     WIDGET__TABLE
     #undef X
@@ -1057,52 +1057,52 @@ void (*widget_func[]) (Ctx *ctx, DrawInfo info) = {
 
 void ui_draw_all3(Ctx *ctx) {
 
-    static Wguitree tree = { 0 };
+    static Uitree tree = { 0 };
     static bool setup = false;
     if (!setup) {
         setup = true;
-        wguitree_create(&tree);
+        uitree_create(&tree);
     }
 
-    wguitree_build_start(&tree, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()+1}});
+    uitree_build_start(&tree, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()+1}});
 
-    Node con_tree = guitree_dumb_container(&tree, cstr_SL(""), widget_vlist);
+    uitree_Node con_tree = uitree_dumb_container(&tree, cstr_SL(""), widget_vlist);
 
-    Node con_vlist = guitree_dumb_container(&tree, cstr_SL("MAIN_V_LIST"), widget_vlist);
+    uitree_Node con_vlist = uitree_dumb_container(&tree, cstr_SL("MAIN_V_LIST"), widget_vlist);
 
     {
-        Node widget_config = guitree_widget(UI_WIDGET_OPTIONS);
-        guitree_container_add_child(&tree, &con_vlist, widget_config);
+        uitree_Node widget_config = uitree_widget(UI_WIDGET_OPTIONS);
+        uitree_container_add_child(&tree, &con_vlist, widget_config);
     }
 
     {
-        Node con_hlist = guitree_container(&tree, cstr_SL("SECONDARY_H_SPLIT"),
+        uitree_Node con_hlist = uitree_container(&tree, cstr_SL("SECONDARY_H_SPLIT"),
                 widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
 
         {
-            Node widget_sprite_list = guitree_widget(UI_WIDGET_SPRITE_LIST);
-            guitree_container_add_child(&tree, &con_hlist, widget_sprite_list);
+            uitree_Node widget_sprite_list = uitree_widget(UI_WIDGET_SPRITE_LIST);
+            uitree_container_add_child(&tree, &con_hlist, widget_sprite_list);
 
-            widget_sprite_list = guitree_widget(UI_WIDGET_SPRITE_LIST);
-            guitree_container_add_child(&tree, &con_hlist, widget_sprite_list);
+            widget_sprite_list = uitree_widget(UI_WIDGET_SPRITE_LIST);
+            uitree_container_add_child(&tree, &con_hlist, widget_sprite_list);
         }
 
-        guitree_container_add_child(&tree, &con_vlist, con_hlist);
+        uitree_container_add_child(&tree, &con_vlist, con_hlist);
     }
 
     {
-        Node widget_config = guitree_widget(UI_WIDGET_OPTIONS);
-        guitree_container_add_child(&tree, &con_vlist, widget_config);
+        uitree_Node widget_config = uitree_widget(UI_WIDGET_OPTIONS);
+        uitree_container_add_child(&tree, &con_vlist, widget_config);
     }
 
-    guitree_container_add_child(&tree, &con_tree, con_vlist);
+    uitree_container_add_child(&tree, &con_tree, con_vlist);
 
     tree.root_node = con_tree;
-    wguitree_build_end(&tree);
+    uitree_build_end(&tree);
 
-    wgtr_List_DrawInfo_It it = { 0 };
-    while(wgtr_List_DrawInfo_it_next(&tree.out_draw_list, &it)) {
-        DrawInfo draw = *it.item;
+    uitree_List_DrawInfo_It it = { 0 };
+    while(uitree_List_DrawInfo_it_next(&tree.out_draw_list, &it)) {
+        uitree_DrawInfo draw = *it.item;
         drawbuf_set_layer((uint8_t)draw.layer);
         printfd("(user space) Widget right here! :) "Rect2i_Fmt" user_fun_id %d,", Rect2i_Arg(draw.area), draw.user_draw_func_id);
 
