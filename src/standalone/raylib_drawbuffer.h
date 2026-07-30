@@ -5,6 +5,7 @@
 #ifndef RAYLIB_DRAWBUFFER_H
 #define RAYLIB_DRAWBUFFER_H
 
+#include <stdlib.h>
 #include "arenady.h"
 #include "raylib.h"
 #include "raylib_extra.h"
@@ -160,6 +161,48 @@ void b_DrawTexture(Texture2D texture, V2i pos, Color tint) {
     Rectangle dest = { (float)pos.x, (float)pos.y, (float)texture.width, (float)texture.height };
     Vector2 origin = { 0.0f, 0.0f };
     b_DrawTexturePro(texture, source, dest, origin, 0, tint);
+}
+
+void b_DrawTextureRec(Texture2D texture, Rectangle source, V2i pos, Color tint) {
+    Rectangle dest = { (float)pos.x, (float)pos.y, fabsf((float)source.width), fabsf((float)source.height) };
+    //Rect2i dest = { pos.x, pos.y, abs(source.width), abs(source.height) };
+    Vector2 origin = { 0.0f, 0.0f };
+    b_DrawTexturePro(texture, source, dest, origin, 0, tint);
+}
+
+void b_DrawTextureScaled(Texture2D texture, Rect2i dest) {
+    b_DrawTexturePro(
+        texture,
+        (Rectangle) {
+            0, 0,
+            (float)texture.width,
+            (float)texture.height
+        },
+        (Rect2i_to_Rect2(dest)).rect,
+        Vector2Zero(), 0, WHITE
+    );
+}
+
+void b_DrawTextureScaled2(Texture2D texture, Rect2i dest, Rect2i source) {
+    b_DrawTexturePro(
+        texture,
+        (Rect2i_to_Rect2(source)).rect,
+        (Rect2i_to_Rect2(dest)).rect,
+        Vector2Zero(), 0, WHITE
+    );
+}
+
+void b_DrawTextureRec_flipped (Texture2D texture, Rect2i source, V2i position, Color tint) {
+    b_DrawTextureRec(
+        texture,
+        (Rectangle){
+            (float)source.x,
+            (float)texture.height - (float)source.height - (float)source.y,
+            (float)source.width,
+            -(float)source.height
+        },
+        position, tint
+    );
 }
 
 #endif

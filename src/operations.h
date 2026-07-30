@@ -69,6 +69,7 @@ void ctx_load_assets(Ctx *ctx) {
 
     ctx->draw.aux_viewport = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
     ctx->draw.aux_viewport2 = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
+    ctx->draw.viewport_texture = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
 
 }
 

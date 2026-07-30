@@ -50,7 +50,7 @@ Vector2 v2i_to_Vector2(V2i v) { return (Vector2) { (float)v.x, (float)v.y }; }
 
 V2i Vector2_to_v2i(Vector2 v) { return (V2i) {{ (int)v.x, (int)v.y }}; }
 
-/* For drawing vertically invertex textures (i.e. BeginTextureMode) */
+/* For drawing vertically inverted textures (i.e. BeginTextureMode) */
 void DrawTextureRec_flipped (Texture2D texture, Rect2i source, V2i position, Color tint) {
     DrawTextureRec(
         texture,

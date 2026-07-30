@@ -273,7 +273,7 @@ void uitree_build_end(Uitree *t) {
                     }
                     uitree_List_DrawInfo *draw_layer = &layers.items[depth];
                     strview_t identifier = strpool_get(&t->strpool, node->identifier_strpool_id);
-                    printfd("(i %d) Widget right here! :) id (%d) (%"PRIstr") "Rect2i_Fmt, curr_item->child_idx, node->identifier_strpool_id, PRIstrarg(identifier), Rect2i_Arg(node->_area));
+                    //printfd("(i %d) Widget right here! :) id (%d) (%"PRIstr") "Rect2i_Fmt, curr_item->child_idx, node->identifier_strpool_id, PRIstrarg(identifier), Rect2i_Arg(node->_area));
 
                     // Check if we have state for this one.
 
@@ -318,14 +318,14 @@ void uitree_build_end(Uitree *t) {
         uitree_List_DrawInfo_It it = { 0 };
         while(uitree_List_DrawInfo_it_next(&layers.items[i], &it)) {
             uitree_List_DrawInfo_append(&t->out_draw_list, *it.item);
-            printfd(ANSI_CYA"(depth %d) Widget right here! :) "Rect2i_Fmt, i, Rect2i_Arg(it.item->area));
+            //printfd(ANSI_CYA"(depth %d) Widget right here! :) "Rect2i_Fmt, i, Rect2i_Arg(it.item->area));
         }
     }
 
     t->state_non_persistent = (uitree_WidgetState) { 0 };
 }
 
-uitree_Node uitree_dumb_container(uitree_ContainerFunc *cont_func) {
+uitree_Node uitree_container_dumb(uitree_ContainerFunc *cont_func) {
     return (uitree_Node) {
         .identifier_strpool_id = -1,
         .is_container = true,
@@ -333,7 +333,7 @@ uitree_Node uitree_dumb_container(uitree_ContainerFunc *cont_func) {
     };
 }
 
-uitree_Node uitree_dumb_container_id(Uitree *t, strview_t id, uitree_ContainerFunc *cont_func) {
+uitree_Node uitree_container_dumb_id(Uitree *t, strview_t id, uitree_ContainerFunc *cont_func) {
     int str_id = -1;
     if (id.size > 0 && id.data != NULL) {
         str_id = strpool_append(&t->strpool, id);

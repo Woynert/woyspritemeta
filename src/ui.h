@@ -18,6 +18,27 @@
 #define ANIMATION_TICKS_PER_FRAME 15
 
 
+#define WIDGET__TABLE \
+X( UI_WIDGET_OPTIONS              , ui_widget_options              ) \
+X( UI_WIDGET_SPRITE_LIST          , ui_widget_sprite_list          ) \
+X( UI_WIDGET_SPRITE_PREVIEW       , ui_widget_sprite_preview       ) \
+X( UI_WIDGET_SPRITESHEET_LIST     , ui_widget_spritesheet_list     ) \
+X( UI_WIDGET_SPRITESHEET_VIEWPORT , ui_widget_spritesheet_viewport ) \
+X( UI_WIDGET_SPRITESHEET_CURSORS  , ui_widget_spritesheet_cursors  ) \
+X( UI_WIDGET_SPRITESHEET_HINTS    , ui_widget_spritesheet_hints    ) \
+X( UI_WIDGET_VSPLIT               , ui_widget_vsplit               ) \
+X( UI_WIDGET_VSPLIT_DRAG          , ui_widget_vsplit_drag          ) \
+X( UI_WIDGET_3HSPLIT_DRAG         , ui_widget_3hsplit_drag         )
+
+
+enum UI_WIDGET {
+    #define X(A, ...) A,
+    WIDGET__TABLE
+    #undef X
+    UI_WIDGET_AMOUNT
+};
+
+
 
 //int ui__calculate_focus(const Widget_view widgets);
 //void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, int count);
@@ -29,7 +50,7 @@ void ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
         ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
 }
 
-void drawbuf_ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
+void b_ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
     b_DrawTextEx(ctx->draw.font, str, pos, ctx->draw.font_size,
         ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
 }
@@ -120,6 +141,131 @@ Rect2i ui_draw_sprite(Ctx *ctx, Sprite *sprite, Rect2i area) {
     return final;
 }
 
+Rect2i b_ui_draw_sprite(Ctx *ctx, Sprite *sprite, Rect2i area) {
+    int frame = (ctx->ticks % (sprite->frames * ANIMATION_TICKS_PER_FRAME)) / ANIMATION_TICKS_PER_FRAME;
+    Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, frame);
+    if (sheet == NULL) {
+        return (Rect2i) { 0 };
+    }
+
+    Rect2i final = {{ 0 }};
+
+    int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
+    int scale_y = find_multiple_max_fit(sprite->rect.size.y, area.size.y);
+    if (scale_x <= 0 || scale_y <= 0) {
+        // Fallback to fraction scaling.
+        final.size = Rect_fit_in_Rect_and_preserve_aspect_ratio(area.size, sprite->rect.size);
+    } else {
+        // Pixel perfect scale.
+        final.size = v2i_mul(sprite->rect.size, v2ii(int_min(scale_x, scale_y)));
+    }
+    // Center.
+    final.pos.x = area.x + ((area.width - final.width) / 2);
+    final.pos.y = area.y + ((area.height - final.height) / 2);
+
+    b_DrawTextureScaled2(sheet->texture, final, sprite->rect);
+    return final;
+}
+
+
+void widget_stack(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
+    (void)user_ctx, (void)state;
+    for (int i = 0; i < child_count; ++i) { children[i] = area; }
+}
+
+
+void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
+    (void)user_ctx, (void)state;
+    for (int i = 0; i < child_count; ++i) {
+        Rect2i *child = &children[i];
+        child->width = area.width;
+        child->x = area.x;
+        child->height = area.height / child_count;
+        child->y = area.y + child->height * i;
+    }
+}
+
+// Only two children supported.
+void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
+    const int pad = 2;
+    float percentage = (float)(state->int_a + 50) / 100.f;
+    (void)user_ctx;
+
+    if (child_count > 0) {
+        Rect2i *child = &children[0];
+        child->width = area.width;
+        child->x = area.x;
+        child->height = (int)((float)area.height * percentage);
+        child->y = area.y;
+    }
+    if (child_count > 1) {
+        Rect2i *child = &children[1];
+        child->width = area.width;
+        child->x = area.x;
+        child->height = (int)((float)area.height * (1.0f - percentage));
+        child->y = area.y + children[0].height;
+    }
+    children[0] = Rect2i_add_padding_all(children[0], pad);
+    children[1] = Rect2i_add_padding_all(children[1], pad);
+
+    // This rect will be used for dragging.
+    state->rect_a = (Rect2i) {
+        .x      = children[0].x,
+        .width  = children[0].width,
+        .y      = children[0].y + children[0].height,
+        .height = pad * 2,
+    };
+
+    if (child_count > 2) { printfd("WAR: Too many children."); }
+}
+
+
+void widget_3hsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
+    (void)user_ctx;
+    const int pad = 2;
+    Rect2i *drag_area1 = &state->rect_a;
+    Rect2i *drag_area2 = &state->rect_b;
+    float percentage1 = (float)state->int_a / 100.f;
+    float percentage2 = (float)state->int_b / 100.f;
+    if (child_count > 0) {
+        Rect2i *child = &children[0];
+        child->height = area.height;
+        child->y = area.y;
+        child->width = (int)((float)area.width * percentage1);
+        child->x = area.x;
+    }
+    if (child_count > 1) {
+        Rect2i *child = &children[1];
+        child->height = area.height;
+        child->y = area.y;
+        child->width = (int)((float)area.width * percentage2) - children[0].width;
+        child->x = children[0].x + children[0].width;
+    }
+    if (child_count > 2) {
+        Rect2i *child = &children[2];
+        child->height = area.height;
+        child->y = area.y;
+        child->width = area.width - children[0].width - children[1].width;
+        child->x = children[1].x + children[1].width;
+    }
+    children[0] = Rect2i_add_padding_all(children[0], pad);
+    children[1] = Rect2i_add_padding_all(children[1], pad);
+    children[2] = Rect2i_add_padding_all(children[2], pad);
+    *drag_area1 = (Rect2i) {
+        .y      = children[0].y,
+        .height = children[0].height,
+        .x      = children[0].x + children[0].width,
+        .width = pad * 2,
+    };
+    *drag_area2 = (Rect2i) {
+        .y      = children[0].y,
+        .height = children[0].height,
+        .x      = children[1].x + children[1].width,
+        .width = pad * 2,
+    };
+    if (child_count > 3) { printfd("WAR: Too many children."); }
+}
+
 
 void ui_widget_scroll(Widget *widget) {
     if (!widget->scroll_enabled) { return; }
@@ -184,8 +330,6 @@ void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, float scale
 
 void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
 
-    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
-
     Rect2i area = info.area;
     bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), area);
     const int line_height = ctx->draw.line_height;
@@ -200,7 +344,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
     line_area.y += line_height;
 
     b_DrawRectangle(area, DEFAULT_BG);
-    drawbuf_ui_draw_text(ctx, cstr_SL("Options:"), pos, DEFAULT_FG);
+    b_ui_draw_text(ctx, cstr_SL("Options:"), pos, DEFAULT_FG);
 
     for (int i = 0; i < ctx->actions.size; ++i)
     {
@@ -215,7 +359,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
             }
         }
 
-        drawbuf_ui_draw_text(ctx, strbuf_view2(action->name), pos, DEFAULT_FG);
+        b_ui_draw_text(ctx, strbuf_view2(action->name), pos, DEFAULT_FG);
 
         ++line;
         line_area.y += line_height;
@@ -246,7 +390,7 @@ void ui_widget_vsplit(Ctx *ctx, uitree_DrawInfo info) {
         // ↑↑↑ This ensures at least 10% is visible at minimum.
     }
 
-    drawbuf_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
+    b_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
 
     b_DrawRectangleLines(area, BLUE, 8);
 }
@@ -280,7 +424,7 @@ void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
         }
     }
 
-    drawbuf_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
+    b_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
 
     //drawbuf_DrawRectangleLines(area, BLUE, 8);
 }
@@ -304,7 +448,6 @@ void ui_widget_3hsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
     }
 
     if (*percentage2 == 0) { *percentage2 = 50; }
-    b_DrawRectangle(area, DEFAULT_BG);
 
     if (CheckCollisionPointReci(GetMousePositioni(), *drag_area1) || (*is_dragging == IS_DRAGGING_1ND)) {
         b_DrawRectangle(*drag_area1, BLUE);
@@ -341,16 +484,15 @@ void ui_widget_3hsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
         *is_dragging = NOT_DRAGGING;
     }
 
-    drawbuf_ui_draw_text(ctx, cstr(TextFormat("%d:%d", *percentage1, *percentage2)), v2i_add(area.pos, v2ii(3)), GREEN);
+    b_ui_draw_text(ctx, cstr(TextFormat("%d:%d", *percentage1, *percentage2)), v2i_add(area.pos, v2ii(3)), GREEN);
 
     //drawbuf_DrawRectangleLines(area, BLUE, 8);
 }
 
-void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
 
-    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
-
-    Rect2i area = widget.area;
+    Rect2i area = info.area;
+    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), area);
     const int line_height = ctx->draw.line_height * 2;
     const int text_pad = 3;
     const int thumbnail_pad = 3;
@@ -362,8 +504,8 @@ void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *re
     bool show_preview = false;
     Texture preview_texture = { 0 };
 
-    DrawRectangleReci(area, DEFAULT_BG);
-    ui_draw_text(ctx, cstr_SL("Spritesheets:"), area.pos, DEFAULT_FG);
+    b_DrawRectangle(area, DEFAULT_BG);
+    b_ui_draw_text(ctx, cstr_SL("Spritesheets:"), area.pos, DEFAULT_FG);
     area.y += ctx->draw.line_height;
 
     for (int i = 0; i < ctx->spritesheet_list.size; ++i)
@@ -376,8 +518,8 @@ void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *re
         thumbnail_area = Rect2i_add_padding_all(thumbnail_area, thumbnail_pad);
         text_offset = (V2i) {{ thumbnail_area.x + thumbnail_area.width + text_pad, item_area.y + text_pad }};
 
-        if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
-            DrawRectangleReci(item_area, BLUE);
+        if (mouse_focus && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
+            b_DrawRectangle(item_area, BLUE);
 
             if (winput_mice_held(MouseLeft)) {
                 show_preview = true;
@@ -385,28 +527,26 @@ void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *re
             }
         }
 
-        ui_draw_text(ctx, strbuf_view2(sheet->path), text_offset, DEFAULT_FG);
+        b_ui_draw_text(ctx, strbuf_view2(sheet->path), text_offset, DEFAULT_FG);
 
-        DrawRectangleReci(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
-        DrawRectangleReci(thumbnail_area, DEFAULT_BG);
-        DrawTextureScaled(sheet->texture, thumbnail_area);
+        b_DrawRectangle(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
+        b_DrawRectangle(thumbnail_area, DEFAULT_BG);
+        b_DrawTextureScaled(sheet->texture, thumbnail_area);
     }
 
     if (show_preview) {
         Rect2i preview_area = { .pos = GetMousePositioni(), .size = {{ preview_texture.width, preview_texture.height }} };
-        DrawRectangleReci(Rect2i_add_padding_all(preview_area, -1), BLACK);
-        DrawRectangleReci(preview_area, DEFAULT_BG);
-        DrawTextureScaled(preview_texture, preview_area);
+        b_DrawRectangle(Rect2i_add_padding_all(preview_area, -1), BLACK);
+        b_DrawRectangle(preview_area, DEFAULT_BG);
+        b_DrawTextureScaled(preview_texture, preview_area);
     }
 }
 
-void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
 
-    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
-
+    Rect2i area = info.area;
+    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), area);
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
-
-    Rect2i area = widget.area;
 
     int selected_sprite = -1;
     {
@@ -424,8 +564,8 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
     Rect2i thumbnail_area;
     V2i text_offset;
 
-    DrawRectangleReci(area, DEFAULT_BG);
-    ui_draw_text(ctx, cstr_SL("Sprites:"), area.pos, DEFAULT_FG);
+    b_DrawRectangle(area, DEFAULT_BG);
+    b_ui_draw_text(ctx, cstr_SL("Sprites:"), area.pos, DEFAULT_FG);
     area.y += ctx->draw.line_height;
 
     for (int i = 0; i < ctx->sprites.size; ++i)
@@ -442,7 +582,7 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
         if (selected_sprite == i) { highlight = true; }
 
-        if (widget.focused && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
+        if (mouse_focus && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
             highlight = true;
             if (winput_mice_pressed(MouseLeft)) {
                 // Select
@@ -451,7 +591,7 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
             }
         }
 
-        if (highlight) { DrawRectangleReci(item_area, BLUE); }
+        if (highlight) { b_DrawRectangle(item_area, BLUE); }
 
         strbuf_assign(&aux_str, cstr_SL(""));
         if (sprite->frames > 1) {
@@ -462,18 +602,17 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
             PRIstrargbuf(sprite->name)
         );
 
-        ui_draw_text(ctx, strbuf_view2(aux_str), text_offset, DEFAULT_FG);
+        b_ui_draw_text(ctx, strbuf_view2(aux_str), text_offset, DEFAULT_FG);
 
         // Draw texture.
 
-        DrawRectangleLinesi(Rect2i_add_padding_all(thumbnail_area, -1), BLACK, 1);
-        ui_draw_sprite(ctx, sprite, thumbnail_area);
+        b_DrawRectangleLines(Rect2i_add_padding_all(thumbnail_area, -1), BLACK, 1);
+        b_ui_draw_sprite(ctx, sprite, thumbnail_area);
     }
 }
 
 
-void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
-    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
+void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
 
     int *selected_sprite_ref = get_selected_sprite(ctx);
     if (selected_sprite_ref == NULL) { return; }
@@ -484,8 +623,8 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
 
     // Calculate current frame.
 
-    DrawRectangleReci(widget.area, DARKGRAY);
-    Rect2i area = widget.area;
+    Rect2i area = info.area;
+    b_DrawRectangle(area, DARKGRAY);
 
     // Draw name controls.
     {
@@ -493,7 +632,7 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
         line_box.height = ctx->draw.line_height;
         line_box.y      = area.y + area.height - line_box.height *2;
 
-        DrawRectangleReci(line_box, DEFAULT_BG);
+        b_DrawRectangle(line_box, DEFAULT_BG);
 
         Rect2i label_box = line_box;
         label_box.width -= label_box.height;
@@ -504,14 +643,14 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
 
         // Name.
         {
-            DrawRectangleLinesi(label_box, BLACK, 1);
+            b_DrawRectangleLines(label_box, BLACK, 1);
             strview_t view;
             if (sprite->name->size == 0) {
                 view = cstr_SL("<unnamed>");
             } else {
                 view = cstr(TextFormat("\"%"PRIstr"\"", PRIstrargbuf(sprite->name)));
             }
-            ui_draw_text(ctx, view, label_box.pos, DEFAULT_FG);
+            b_ui_draw_text(ctx, view, label_box.pos, DEFAULT_FG);
         }
 
         // Edit name button.
@@ -528,7 +667,7 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
             }
         }
 
-        ui_draw_text(ctx, cstr_SL("Edit"), btn_edit_box.pos, DEFAULT_FG);
+        b_ui_draw_text(ctx, cstr_SL("Edit"), btn_edit_box.pos, DEFAULT_FG);
     }
 
     // Draw frame controls.
@@ -543,23 +682,23 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
         Rect2i frame_minus_box = chunks[1];
         Rect2i frame_plus_box  = chunks[2];
 
-        DrawRectangleReci(line_box, DEFAULT_BG);
-        ui_draw_text(ctx, cstr(TextFormat("Frames %d", sprite->frames)), label_box.pos, DEFAULT_FG);
-        DrawRectangleLinesi(label_box, BLACK, 1);
+        b_DrawRectangle(line_box, DEFAULT_BG);
+        b_ui_draw_text(ctx, cstr(TextFormat("Frames %d", sprite->frames)), label_box.pos, DEFAULT_FG);
+        b_DrawRectangleLines(label_box, BLACK, 1);
 
         if (ui_simple_button(frame_minus_box)) {
             if (sprite->frames > 1) {
                 --sprite->frames;
             }
         }
-        ui_draw_text(ctx, cstr_SL("-"), frame_minus_box.pos, DEFAULT_FG);
+        b_ui_draw_text(ctx, cstr_SL("-"), frame_minus_box.pos, DEFAULT_FG);
 
         if (ui_simple_button(frame_plus_box)) {
             if (sprite->frames < ctx->spritesheet_list.size) {
                 ++sprite->frames;
             }
         }
-        ui_draw_text(ctx, cstr_SL("+"), frame_plus_box.pos, DEFAULT_FG);
+        b_ui_draw_text(ctx, cstr_SL("+"), frame_plus_box.pos, DEFAULT_FG);
     }
 
     area.height -= ctx->draw.line_height * 2;
@@ -571,15 +710,16 @@ void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req)
         DrawRectangleReci(area, DARKGRAY);
         ui_draw_sprite(ctx, sprite, area);
         EndTextureMode();
-        DrawTextureRec_flipped(ctx->draw.aux_viewport.texture, area, area.pos, WHITE);
+        b_DrawTextureRec_flipped(ctx->draw.aux_viewport.texture, area, area.pos, WHITE);
     }
 }
 
 
-void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+void ui_widget_spritesheet_cursors(Ctx *ctx, uitree_DrawInfo info) {
 
-    Rect2i area = widget.area;
+    Rect2i area = info.area;
     V2i mouse = GetMousePositioni();
+    bool mouse_focus = CheckCollisionPointReci(mouse, area);
 
     const int btn_width = 30;
     Rect2i btn_area = {{
@@ -587,6 +727,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
         .width = btn_width, .height = btn_width
     }};
 
+    /*
     {
         // Report focusable area.
         if (req != NULL && req->focus_area_request) {
@@ -595,7 +736,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
             req->focus_area.height *= SHEETEDITOR_CURSOR__COUNT;
         }
         //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
-    }
+    }*/
 
     SHEETEDITOR_CURSOR mode;
     bool pressed;
@@ -603,11 +744,11 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 
     // Tweak cursor. (DEFAULT)
     mode = SHEETEDITOR_CURSOR_TWEAK;
-    pressed = winput_mice_pressed(MouseLeft) && widget.focused && CheckCollisionPointReci(mouse, btn_area);
+    pressed = winput_mice_pressed(MouseLeft) && mouse_focus && CheckCollisionPointReci(mouse, btn_area);
     bg_color = pressed ? DARKBLUE : ctx->editor.cursor == mode ? BLUE : DEFAULT_BG;
-    DrawRectangleReci(btn_area, BLACK);
-    DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
-    ui_draw_text(ctx, cstr_SL("Tweak"), btn_area.pos, DEFAULT_FG);
+    b_DrawRectangle(btn_area, BLACK);
+    b_DrawRectangle(Rect2i_add_padding_all(btn_area, 1), bg_color);
+    b_ui_draw_text(ctx, cstr_SL("Tweak"), btn_area.pos, DEFAULT_FG);
     if (pressed) {
         spritesheet_try_set_cursor_mode(ctx, mode);
     }
@@ -615,11 +756,11 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 
     // Add cursor.
     mode = SHEETEDITOR_CURSOR_ADD;
-    pressed = winput_mice_pressed(MouseLeft) && widget.focused && CheckCollisionPointReci(mouse, btn_area);
+    pressed = winput_mice_pressed(MouseLeft) && mouse_focus && CheckCollisionPointReci(mouse, btn_area);
     bg_color = pressed ? DARKBLUE : ctx->editor.cursor == mode ? BLUE : DEFAULT_BG;
-    DrawRectangleReci(btn_area, BLACK);
-    DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
-    ui_draw_text(ctx, cstr_SL("Add"), btn_area.pos, DEFAULT_FG);
+    b_DrawRectangle(btn_area, BLACK);
+    b_DrawRectangle(Rect2i_add_padding_all(btn_area, 1), bg_color);
+    b_ui_draw_text(ctx, cstr_SL("Add"), btn_area.pos, DEFAULT_FG);
     if (pressed) {
         spritesheet_try_set_cursor_mode(ctx, mode);
     }
@@ -627,29 +768,28 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 
     // Reset zoom and pan button.
     bg_color = DEFAULT_BG;
-    pressed = winput_mice_pressed(MouseLeft) && widget.focused && CheckCollisionPointReci(mouse, btn_area);
+    pressed = winput_mice_pressed(MouseLeft) && mouse_focus && CheckCollisionPointReci(mouse, btn_area);
     bg_color = pressed ? DARKBLUE : DEFAULT_BG;
-    DrawRectangleReci(btn_area, BLACK);
-    DrawRectangleReci(Rect2i_add_padding_all(btn_area, 1), bg_color);
-    ui_draw_text(ctx, cstr_SL("Reset\nZoom"), btn_area.pos, DEFAULT_FG);
+    b_DrawRectangle(btn_area, BLACK);
+    b_DrawRectangle(Rect2i_add_padding_all(btn_area, 1), bg_color);
+    b_ui_draw_text(ctx, cstr_SL("Reset\nZoom"), btn_area.pos, DEFAULT_FG);
     if (pressed) {
         zoompanel_reset_zoom_and_pan(&ctx->zoompanel);
     }
     btn_area.y += btn_area.height;
 }
 
-void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
-    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
+void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 
+
+    Rect2i area = info.area;
+    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), area);
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
-
-    Rect2i area = widget.area;
-
     V2i mouse = GetMousePositioni();
 
     if (ctx->spritesheet_list.size <= 0) {
-        DrawRectangleReci(widget.area, DEFAULT_BG);
-        ui_draw_text(ctx, cstr_SL("No spritesheet loaded."), v2i_add(widget.area.pos, v2ii(10)), DEFAULT_FG);
+        b_DrawRectangle(area, DEFAULT_BG);
+        b_ui_draw_text(ctx, cstr_SL("No spritesheet loaded."), v2i_add(area.pos, v2ii(10)), DEFAULT_FG);
         return;
     }
 
@@ -657,13 +797,11 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     const Texture texture = ctx->spritesheet_list.items[0].texture;
 
-    //Rect2i draw_area = Rect2i_add_padding_all(area, 10);
-    Rect2i draw_area = area;
     V2i texture_size = v2i(texture.width, texture.height);
 
-    zoompanel_process(&ctx->zoompanel, texture_size, draw_area);
+    zoompanel_process(&ctx->zoompanel, texture_size, area);
 
-    V2i panned_origin = v2i_add(draw_area.pos, ctx->zoompanel.offset_from_origin);
+    V2i panned_origin = v2i_add(area.pos, ctx->zoompanel.offset_from_origin);
     V2i scaled_size = v2f_2i(v2f_mul(v2i_2f(texture_size), v2ff(ctx->zoompanel.zoom)));
     Rect2i final = (Rect2i){
         .pos = panned_origin,
@@ -680,8 +818,8 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     // Draw on screen.
 
-    BeginTextureMode(ctx->draw.aux_viewport);
-    DrawRectangleReci(draw_area, DARKGRAY);
+    BeginTextureMode(ctx->draw.viewport_texture);
+    DrawRectangleReci(area, DARKGRAY);
     DrawRectangleReci(final, DEFAULT_BG);
     DrawCheckerboard(final, (Color){ 0, 0, 0, 10 }, (int)(((float)16 * ctx->zoompanel.zoom)));
     DrawTextureScaled(texture, final);
@@ -716,7 +854,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
         || ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
         || ctx->editor.cursor == SHEETEDITOR_CURSOR_RESIZE
     ) {
-        ctx->editor.mouse_inside = widget.focused && CheckCollisionPointReci(mouse, draw_area);
+        ctx->editor.mouse_inside = mouse_focus && CheckCollisionPointReci(mouse, area);
 
         // Holding.
         if (ctx->editor.mouse_is_selecting) {
@@ -739,12 +877,13 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq
 
     EndTextureMode();
 
-    DrawTextureRec_flipped(ctx->draw.aux_viewport.texture,
-            draw_area, draw_area.pos, WHITE);
+    b_DrawTextureRec_flipped(ctx->draw.viewport_texture.texture,
+            area, area.pos, WHITE);
 }
 
 
-void ui_widget_spritesheet_hints(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+void ui_widget_spritesheet_hints(Ctx *ctx, uitree_DrawInfo info) {
+    /*
     {
         // This widget is unfocusable.
         // Report back as having NO focus area at all.
@@ -753,7 +892,8 @@ void ui_widget_spritesheet_hints(Ctx *ctx, const WidgetDraw widget, WidgetReq *r
             req->focus_area = (Rect2i) { 0 };
             return;
         }
-    }
+    }*/
+    const Rect2i area = info.area;
 
     if (ctx->spritesheet_list.size <= 0) { return; }
 
@@ -772,10 +912,18 @@ void ui_widget_spritesheet_hints(Ctx *ctx, const WidgetDraw widget, WidgetReq *r
         break;
     }
     case SHEETEDITOR_CURSOR_DRAG:
+    {
+        text = cstr_SL(
+            "Left click to confirm.\n"
+            "Right click, Escape, Q to cancel."
+        );
+        break;
+    }
     case SHEETEDITOR_CURSOR_RESIZE:
     {
         text = cstr_SL(
             "Left click to confirm.\n"
+            "Shift for square selection.\n"
             "Right click, Escape, Q to cancel."
         );
         break;
@@ -793,25 +941,19 @@ void ui_widget_spritesheet_hints(Ctx *ctx, const WidgetDraw widget, WidgetReq *r
     }
 
     V2i measure = MeasureTextEx_woyi(ctx->draw.font, text, ctx->draw.font_size, ctx->draw.char_spacing, ctx->draw.line_spacing);
-    ui_draw_text(ctx, text, v2i_sub(v2i_add(widget.area.pos, widget.area.size), measure), DEFAULT_FG);
+    b_ui_draw_text(ctx, text, v2i_sub(v2i_add(area.pos, area.size), measure), DEFAULT_FG);
 }
 
-//void ui_widget_spritesheet(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
-
-    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
-
-    //static Widget widgets[] = {
-        //{ .draw_function = ui_widget_spritesheet_viewport, },
-        //{ .draw_function = ui_widget_spritesheet_cursors   },
-        //{ .draw_function = ui_widget_spritesheet_hints     },
-    //};
-
-    //for (foreach_auto(Widget, w, widgets)) {
-        //w.ref->screen_area = widget.area;
-    //}
-
-    //ui__calculate_focus_and_draw_widgets(ctx, widgets, countof(widgets));
-//}
+uitree_Node ui_widget_spritesheet(Uitree *tree) {
+    uitree_Node con_stack = uitree_container_dumb(widget_stack);
+    uitree_Node widget = uitree_widget(UI_WIDGET_SPRITESHEET_VIEWPORT);
+    uitree_container_add_child(tree, &con_stack, widget);
+    widget = uitree_widget(UI_WIDGET_SPRITESHEET_CURSORS);
+    uitree_container_add_child(tree, &con_stack, widget);
+    widget = uitree_widget(UI_WIDGET_SPRITESHEET_HINTS);
+    uitree_container_add_child(tree, &con_stack, widget);
+    return con_stack;
+}
 
 
 /*
@@ -1031,97 +1173,6 @@ void ui_draw_all2(Ctx *ctx) {
 //#include "./src/standalone/uitree.h"
 
 
-void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
-    (void)user_ctx, (void)state;
-    for (int i = 0; i < child_count; ++i) {
-        Rect2i *child = &children[i];
-        child->width = area.width;
-        child->x = area.x;
-        child->height = area.height / child_count;
-        child->y = area.y + child->height * i;
-    }
-}
-
-// Only two children supported.
-void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
-    const int pad = 2;
-    float percentage = (float)(state->int_a + 50) / 100.f;
-    (void)user_ctx;
-
-    if (child_count > 0) {
-        Rect2i *child = &children[0];
-        child->width = area.width;
-        child->x = area.x;
-        child->height = (int)((float)area.height * percentage);
-        child->y = area.y;
-    }
-    if (child_count > 1) {
-        Rect2i *child = &children[1];
-        child->width = area.width;
-        child->x = area.x;
-        child->height = (int)((float)area.height * (1.0f - percentage));
-        child->y = area.y + children[0].height;
-    }
-    children[0] = Rect2i_add_padding_all(children[0], pad);
-    children[1] = Rect2i_add_padding_all(children[1], pad);
-
-    // This rect will be used for dragging.
-    state->rect_a = (Rect2i) {
-        .x      = children[0].x,
-        .width  = children[0].width,
-        .y      = children[0].y + children[0].height,
-        .height = pad * 2,
-    };
-
-    if (child_count > 2) { printfd("WAR: Too many children."); }
-}
-
-
-void widget_3hsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
-    (void)user_ctx;
-    const int pad = 2;
-    Rect2i *drag_area1 = &state->rect_a;
-    Rect2i *drag_area2 = &state->rect_b;
-    float percentage1 = (float)state->int_a / 100.f;
-    float percentage2 = (float)state->int_b / 100.f;
-    if (child_count > 0) {
-        Rect2i *child = &children[0];
-        child->height = area.height;
-        child->y = area.y;
-        child->width = (int)((float)area.width * percentage1);
-        child->x = area.x;
-    }
-    if (child_count > 1) {
-        Rect2i *child = &children[1];
-        child->height = area.height;
-        child->y = area.y;
-        child->width = (int)((float)area.width * percentage2) - children[0].width;
-        child->x = children[0].x + children[0].width;
-    }
-    if (child_count > 2) {
-        Rect2i *child = &children[2];
-        child->height = area.height;
-        child->y = area.y;
-        child->width = area.width - (children[0].width - children[1].width);
-        child->x = children[1].x + children[1].width;
-    }
-    children[0] = Rect2i_add_padding_all(children[0], pad);
-    children[1] = Rect2i_add_padding_all(children[1], pad);
-    children[2] = Rect2i_add_padding_all(children[2], pad);
-    *drag_area1 = (Rect2i) {
-        .y      = children[0].y,
-        .height = children[0].height,
-        .x      = children[0].x + children[0].width,
-        .width = pad * 2,
-    };
-    *drag_area2 = (Rect2i) {
-        .y      = children[0].y,
-        .height = children[0].height,
-        .x      = children[1].x + children[1].width,
-        .width = pad * 2,
-    };
-    if (child_count > 3) { printfd("WAR: Too many children."); }
-}
 
 
 
@@ -1133,20 +1184,6 @@ void widget_simple_text(Rect2i area, bool focused, Ctx *ctx, int child_count, Re
 }
 
 
-#define WIDGET__TABLE \
-X( UI_WIDGET_OPTIONS     , ui_widget_options      ) \
-X( UI_WIDGET_SPRITE_LIST , ui_widget_options      ) \
-X( UI_WIDGET_VSPLIT      , ui_widget_vsplit       ) \
-X( UI_WIDGET_VSPLIT_DRAG , ui_widget_vsplit_drag  ) \
-X( UI_WIDGET_3HSPLIT_DRAG, ui_widget_3hsplit_drag )
-
-enum UI_WIDGET {
-    #define X(A, ...) A,
-    WIDGET__TABLE
-    #undef X
-    UI_WIDGET_AMOUNT
-};
-
 // ↓↓↓ Maps UI_WIDGET to function pointer.
 
 void (*widget_func[]) (Ctx *ctx, uitree_DrawInfo info) = {
@@ -1154,7 +1191,6 @@ void (*widget_func[]) (Ctx *ctx, uitree_DrawInfo info) = {
     WIDGET__TABLE
     #undef X
 };
-
 
 void ui_draw_all3(Ctx *ctx) {
 
@@ -1168,7 +1204,7 @@ void ui_draw_all3(Ctx *ctx) {
     uitree_build_start(&tree, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()+1}});
 
     uitree_Node widget;
-    uitree_Node con_tree = uitree_dumb_container(widget_vlist);
+    uitree_Node con_tree = uitree_container_dumb(widget_vlist);
 
     {
         uitree_Node con_3split = uitree_container(&tree, cstr_SL("MainHSplit"),
@@ -1180,7 +1216,7 @@ void ui_draw_all3(Ctx *ctx) {
                     widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
 
                 {
-                    widget = uitree_widget(UI_WIDGET_SPRITE_LIST);
+                    widget = uitree_widget(UI_WIDGET_OPTIONS);
                     uitree_container_add_child(&tree, &con_vsplit, widget);
 
                     widget = uitree_widget(UI_WIDGET_SPRITE_LIST);
@@ -1190,7 +1226,7 @@ void ui_draw_all3(Ctx *ctx) {
                 uitree_container_add_child(&tree, &con_3split, con_vsplit);
             }
 
-            widget = uitree_widget(UI_WIDGET_SPRITE_LIST);
+            widget = ui_widget_spritesheet(&tree);
             uitree_container_add_child(&tree, &con_3split, widget);
 
             {
@@ -1198,10 +1234,10 @@ void ui_draw_all3(Ctx *ctx) {
                     widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
 
                 {
-                    widget = uitree_widget(UI_WIDGET_SPRITE_LIST);
+                    widget = uitree_widget(UI_WIDGET_SPRITESHEET_LIST);
                     uitree_container_add_child(&tree, &con_vsplit, widget);
 
-                    widget = uitree_widget(UI_WIDGET_SPRITE_LIST);
+                    widget = uitree_widget(UI_WIDGET_SPRITE_PREVIEW);
                     uitree_container_add_child(&tree, &con_vsplit, widget);
                 }
 
@@ -1218,7 +1254,7 @@ void ui_draw_all3(Ctx *ctx) {
     while(uitree_List_DrawInfo_it_next(&tree.out_draw_list, &it)) {
         uitree_DrawInfo draw = *it.item;
         drawbuf_set_layer((uint8_t)draw.layer);
-        printfd("(user space) Widget right here! :) "Rect2i_Fmt" user_fun_id %d,", Rect2i_Arg(draw.area), draw.user_draw_func_id);
+        //printfd("(user space) Widget right here! :) "Rect2i_Fmt" user_fun_id %d,", Rect2i_Arg(draw.area), draw.user_draw_func_id);
 
         widget_func[it.item->user_draw_func_id](ctx, draw);
     }
