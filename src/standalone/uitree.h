@@ -21,9 +21,12 @@
 
 
 typedef struct uitree_WidgetState {
-    int scroll;
+    int int_a;
     int int_b;
+    int int_c;
+    int int_d;
     Rect2i rect_a;
+    Rect2i rect_b;
     int __last_frame; // Used to determine if we should persist it or forget it.
 } uitree_WidgetState;
 
