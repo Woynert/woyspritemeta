@@ -5,7 +5,7 @@
 #ifndef RAYLIB_DRAWBUFFER_H
 #define RAYLIB_DRAWBUFFER_H
 
-#include "../subprojects/woycontainer/src/arenady.h"
+#include "arenady.h"
 #include "raylib.h"
 #include "raylib_extra.h"
 
@@ -22,21 +22,21 @@ typedef enum {
 #include "da.h"
 
 
-typedef struct DrawLayer {
+typedef struct drawbuf_Layer {
     ArenaDy arena;
     DrawCmd_da commands;
-} DrawLayer;
+} drawbuf_Layer;
 
 
 struct {
-    DrawLayer layers[256];
+    drawbuf_Layer layers[256];
 } DrawBuf;
 uint8_t DrawBuf__currlayer = 0;
 
 
 void drawbuf_init(void) {
     for (int i = 0; i < countofi(DrawBuf.layers); ++i) {
-        DrawLayer *layer = &DrawBuf.layers[i];
+        drawbuf_Layer *layer = &DrawBuf.layers[i];
         layer->arena = arenady_create();
         layer->commands = DrawCmd_da_create();
     }
@@ -44,7 +44,7 @@ void drawbuf_init(void) {
 
 void drawbuf_deinit(void) {
     for (int i = 0; i < countofi(DrawBuf.layers); ++i) {
-        DrawLayer *layer = &DrawBuf.layers[i];
+        drawbuf_Layer *layer = &DrawBuf.layers[i];
         arenady_free(&layer->arena);
         DrawCmd_da_free(&layer->commands);
     }
@@ -59,56 +59,9 @@ typedef struct { Rect2i r; Color color; int thickness; } drawbuf_t_DrawRectangle
 typedef struct { Font font; V2i position; int font_size; int spacing; int textLineSpacing; Color tint; int str_size; char str_data[]; } drawbuf_t_DrawTextEx;
 typedef struct { Texture2D texture; Rectangle source; Rectangle dest; Vector2 origin; float rotation; Color tint; } drawbuf_t_DrawTexturePro;
 
-void drawbuf_DrawTexturePro(Texture2D texture, Rectangle source, Rectangle dest, Vector2 origin, float rotation, Color tint) {
-    DrawLayer *layer = &DrawBuf.layers[DrawBuf__currlayer];
-    drawbuf_t_DrawTexturePro *args = arenady_new(&layer->arena, drawbuf_t_DrawTexturePro, 1);
-    args->texture = texture;
-    args->source = source;
-    args->dest = dest;
-    args->origin = origin;
-    args->rotation = rotation;
-    args->tint = tint;
-    DrawCmd_da_append(&layer->commands, DRAWCMD_TEXTURE);
-}
-
-void drawbuf_DrawRectangle(Rect2i r, Color color) {
-    DrawLayer *layer = &DrawBuf.layers[DrawBuf__currlayer];
-    drawbuf_t_DrawRectangle *args = arenady_new(&layer->arena, drawbuf_t_DrawRectangle, 1);
-    args->r = r;
-    args->color = color;
-    DrawCmd_da_append(&layer->commands, DRAWCMD_RECTANGLE);
-}
-
-void drawbuf_DrawRectangleLines(Rect2i r, Color color, int thickness) {
-    DrawLayer *layer = &DrawBuf.layers[DrawBuf__currlayer];
-    drawbuf_t_DrawRectangleLines *args = arenady_new(&layer->arena, drawbuf_t_DrawRectangleLines, 1);
-    args->r = r;
-    args->color = color;
-    args->thickness = thickness;
-    DrawCmd_da_append(&layer->commands, DRAWCMD_RECTANGLE_LINES);
-}
-
-void drawbuf_DrawTextEx(Font font, const strview_t string, V2i pos, int font_size, int spacing, int textLineSpacing, Color tint) {
-    DrawLayer *layer = &DrawBuf.layers[DrawBuf__currlayer];
-    // Allocate struct + size in one call.
-    drawbuf_t_DrawTextEx *args = (drawbuf_t_DrawTextEx *)
-        arenady_alloc(&layer->arena, (i64)(sizeof(drawbuf_t_DrawTextEx) + (size_t)string.size), _Alignof(drawbuf_t_DrawTextEx), 1);
-    args->font = font;
-    args->position = pos;
-    args->font_size = font_size;
-    args->spacing = spacing;
-    args->textLineSpacing = textLineSpacing;
-    args->tint = tint;
-    args->str_size = string.size;
-    memmove(args->str_data, string.data, (size_t)string.size);
-    DrawCmd_da_append(&layer->commands, DRAWCMD_TEXT_EX);
-}
-
-
-
 void drawbuf_draw_all(void) {
     for (int i = 0; i < countofi(DrawBuf.layers); ++i) {
-        DrawLayer *layer = &DrawBuf.layers[i];
+        drawbuf_Layer *layer = &DrawBuf.layers[i];
         arenady_reset_beginning(&layer->arena);
         for (dyna_foreach(DrawCmd, iter, layer->commands)) {
             DrawCmd cmd = *iter.ref;
@@ -144,25 +97,69 @@ void drawbuf_draw_all(void) {
     }
 }
 
+void b_DrawTexturePro(Texture2D texture, Rectangle source, Rectangle dest, Vector2 origin, float rotation, Color tint) {
+    drawbuf_Layer *layer = &DrawBuf.layers[DrawBuf__currlayer];
+    drawbuf_t_DrawTexturePro *args = arenady_new(&layer->arena, drawbuf_t_DrawTexturePro, 1);
+    args->texture = texture;
+    args->source = source;
+    args->dest = dest;
+    args->origin = origin;
+    args->rotation = rotation;
+    args->tint = tint;
+    DrawCmd_da_append(&layer->commands, DRAWCMD_TEXTURE);
+}
+
+void b_DrawRectangle(Rect2i r, Color color) {
+    drawbuf_Layer *layer = &DrawBuf.layers[DrawBuf__currlayer];
+    drawbuf_t_DrawRectangle *args = arenady_new(&layer->arena, drawbuf_t_DrawRectangle, 1);
+    args->r = r;
+    args->color = color;
+    DrawCmd_da_append(&layer->commands, DRAWCMD_RECTANGLE);
+}
+
+void b_DrawRectangleLines(Rect2i r, Color color, int thickness) {
+    drawbuf_Layer *layer = &DrawBuf.layers[DrawBuf__currlayer];
+    drawbuf_t_DrawRectangleLines *args = arenady_new(&layer->arena, drawbuf_t_DrawRectangleLines, 1);
+    args->r = r;
+    args->color = color;
+    args->thickness = thickness;
+    DrawCmd_da_append(&layer->commands, DRAWCMD_RECTANGLE_LINES);
+}
+
+void b_DrawTextEx(Font font, const strview_t string, V2i pos, int font_size, int spacing, int textLineSpacing, Color tint) {
+    drawbuf_Layer *layer = &DrawBuf.layers[DrawBuf__currlayer];
+    // Allocate struct + size in one call.
+    drawbuf_t_DrawTextEx *args = (drawbuf_t_DrawTextEx *)
+        arenady_alloc(&layer->arena, (i64)(sizeof(drawbuf_t_DrawTextEx) + (size_t)string.size), _Alignof(drawbuf_t_DrawTextEx), 1);
+    args->font = font;
+    args->position = pos;
+    args->font_size = font_size;
+    args->spacing = spacing;
+    args->textLineSpacing = textLineSpacing;
+    args->tint = tint;
+    args->str_size = string.size;
+    memmove(args->str_data, string.data, (size_t)string.size);
+    DrawCmd_da_append(&layer->commands, DRAWCMD_TEXT_EX);
+}
 
 // Extra functions for ease of use. ↓↓↓
 
-void drawbuf_DrawText(const strview_t str, V2i pos, int font_size, Color tint) {
-    drawbuf_DrawTextEx(GetFontDefault(), str, pos, font_size, 1, 1, tint);
+void b_DrawText(const strview_t str, V2i pos, int font_size, Color tint) {
+    b_DrawTextEx(GetFontDefault(), str, pos, font_size, 1, 1, tint);
 }
 
-void drawbuf_DrawTextureEx(Texture2D texture, V2i pos, float rotation, float scale, Color tint) {
+void b_DrawTextureEx(Texture2D texture, V2i pos, float rotation, float scale, Color tint) {
     Rectangle source = { 0.0f, 0.0f, (float)texture.width, (float)texture.height };
     Rectangle dest = { (float)pos.x, (float)pos.y, (float)texture.width*scale, (float)texture.height*scale };
     Vector2 origin = { 0.0f, 0.0f };
-    drawbuf_DrawTexturePro(texture, source, dest, origin, rotation, tint);
+    b_DrawTexturePro(texture, source, dest, origin, rotation, tint);
 }
 
-void drawbuf_DrawTexture(Texture2D texture, V2i pos, Color tint) {
+void b_DrawTexture(Texture2D texture, V2i pos, Color tint) {
     Rectangle source = { 0.0f, 0.0f, (float)texture.width, (float)texture.height };
     Rectangle dest = { (float)pos.x, (float)pos.y, (float)texture.width, (float)texture.height };
     Vector2 origin = { 0.0f, 0.0f };
-    drawbuf_DrawTexturePro(texture, source, dest, origin, 0, tint);
+    b_DrawTexturePro(texture, source, dest, origin, 0, tint);
 }
 
 #endif

@@ -322,7 +322,15 @@ void uitree_build_end(Uitree *t) {
     t->state_non_persistent = (uitree_WidgetState) { 0 };
 }
 
-uitree_Node uitree_dumb_container(Uitree *t, strview_t id, uitree_ContainerFunc *cont_func) {
+uitree_Node uitree_dumb_container(uitree_ContainerFunc *cont_func) {
+    return (uitree_Node) {
+        .identifier_strpool_id = -1,
+        .is_container = true,
+        .container_func = cont_func,
+    };
+}
+
+uitree_Node uitree_dumb_container_id(Uitree *t, strview_t id, uitree_ContainerFunc *cont_func) {
     int str_id = -1;
     if (id.size > 0 && id.data != NULL) {
         str_id = strpool_append(&t->strpool, id);

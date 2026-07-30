@@ -12,14 +12,14 @@
 #include "portable_utils.h"
 #include "./standalone/uitree.h"
 
-#define UI_WIDGET_DEFAULT_REQUEST_HANDLER(req) do {            \
-    if (req != NULL) {                                             \
-        if (req->focus_area_request && !req->focus_area_success) { \
-            req->focus_area_success = true;                        \
-            req->focus_area = widget.area;                         \
-        }                                                          \
-        /* return; */                                              \
-    }} while (0)
+//#define UI_WIDGET_DEFAULT_REQUEST_HANDLER(req) do {            \
+    //if (req != NULL) {                                             \
+        //if (req->focus_area_request && !req->focus_area_success) { \
+            //req->focus_area_success = true;                        \
+            //req->focus_area = widget.area;                         \
+        //}                                                          \
+        //[> return; <]                                              \
+    //}} while (0)
 
 #define DEFAULT_BG LIGHTGRAY
 #define DEFAULT_FG BLACK
@@ -27,8 +27,8 @@
 
 
 
-int ui__calculate_focus(const Widget_view widgets);
-void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, int count);
+//int ui__calculate_focus(const Widget_view widgets);
+//void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, int count);
 
 
 
@@ -38,7 +38,7 @@ void ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
 }
 
 void drawbuf_ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
-    drawbuf_DrawTextEx(ctx->draw.font, str, pos, ctx->draw.font_size,
+    b_DrawTextEx(ctx->draw.font, str, pos, ctx->draw.font_size,
         ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
 }
 
@@ -207,7 +207,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
     Rect2i line_area = {{ pos.x, pos.y, area.width -pad, line_height }};
     line_area.y += line_height;
 
-    drawbuf_DrawRectangle(area, DEFAULT_BG);
+    b_DrawRectangle(area, DEFAULT_BG);
     drawbuf_ui_draw_text(ctx, cstr_SL("Options:"), pos, DEFAULT_FG);
 
     for (int i = 0; i < ctx->actions.size; ++i)
@@ -216,7 +216,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
         pos = (V2i) {{ (int)area.x + pad, (int)area.y + line * ctx->draw.line_height }};
 
         if (mouse_focus && CheckCollisionPointReci(GetMousePositioni(), line_area)) {
-            drawbuf_DrawRectangle(line_area, BLUE);
+            b_DrawRectangle(line_area, BLUE);
 
             if (winput_mice_pressed(MouseLeft)) {
                 call_action(ctx, action);
@@ -236,7 +236,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
     }
 
     ui_draw_text(ctx, cstr(TextFormat("%d", info.state->scroll)), area.pos, BLUE);
-    drawbuf_DrawRectangleLines(area, MAGENTA, 1);
+    b_DrawRectangleLines(area, MAGENTA, 1);
 
     // DELME
 }
@@ -246,7 +246,7 @@ void ui_widget_vsplit(Ctx *ctx, uitree_DrawInfo info) {
 
     Rect2i area = info.area;
 
-    drawbuf_DrawRectangle(area, DEFAULT_BG);
+    b_DrawRectangle(area, DEFAULT_BG);
 
     if (winput_wheel() != 0) {
         info.state->scroll -= int_sign((int)winput_wheel()) * 3;
@@ -256,7 +256,7 @@ void ui_widget_vsplit(Ctx *ctx, uitree_DrawInfo info) {
 
     drawbuf_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->scroll)), v2i_add(area.pos, v2ii(3)), GREEN);
 
-    drawbuf_DrawRectangleLines(area, BLUE, 8);
+    b_DrawRectangleLines(area, BLUE, 8);
 }
 
 void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
@@ -265,10 +265,10 @@ void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
     Rect2i drag_area = info.state->rect_a;
     int *is_dragging = &info.state->int_b;
 
-    drawbuf_DrawRectangle(area, DEFAULT_BG);
+    b_DrawRectangle(area, DEFAULT_BG);
 
     if (CheckCollisionPointReci(GetMousePositioni(), drag_area) || *is_dragging) {
-        drawbuf_DrawRectangle(drag_area, ORANGE);
+        b_DrawRectangle(drag_area, ORANGE);
         if (winput_mice_pressed(MouseLeft)) {
             *is_dragging = true;
         }
@@ -295,7 +295,7 @@ void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
 
 void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
+    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     Rect2i area = widget.area;
     const int line_height = ctx->draw.line_height * 2;
@@ -349,7 +349,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *re
 
 void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
+    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
 
@@ -420,7 +420,7 @@ void ui_widget_sprite_list(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
 
 void ui_widget_sprite_preview(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
-    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
+    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     int *selected_sprite_ref = get_selected_sprite(ctx);
     if (selected_sprite_ref == NULL) { return; }
@@ -541,7 +541,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
             req->focus_area = btn_area;
             req->focus_area.height *= SHEETEDITOR_CURSOR__COUNT;
         }
-        UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
+        //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
     }
 
     SHEETEDITOR_CURSOR mode;
@@ -586,7 +586,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, const WidgetDraw widget, WidgetReq 
 }
 
 void ui_widget_spritesheet_viewport(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
-    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
+    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
 
@@ -743,22 +743,22 @@ void ui_widget_spritesheet_hints(Ctx *ctx, const WidgetDraw widget, WidgetReq *r
     ui_draw_text(ctx, text, v2i_sub(v2i_add(widget.area.pos, widget.area.size), measure), DEFAULT_FG);
 }
 
-void ui_widget_spritesheet(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
+//void ui_widget_spritesheet(Ctx *ctx, const WidgetDraw widget, WidgetReq *req) {
 
-    UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
+    //UI_WIDGET_DEFAULT_REQUEST_HANDLER(req);
 
-    static Widget widgets[] = {
-        { .draw_function = ui_widget_spritesheet_viewport, },
-        { .draw_function = ui_widget_spritesheet_cursors   },
-        { .draw_function = ui_widget_spritesheet_hints     },
-    };
+    //static Widget widgets[] = {
+        //{ .draw_function = ui_widget_spritesheet_viewport, },
+        //{ .draw_function = ui_widget_spritesheet_cursors   },
+        //{ .draw_function = ui_widget_spritesheet_hints     },
+    //};
 
-    for (foreach_auto(Widget, w, widgets)) {
-        w.ref->screen_area = widget.area;
-    }
+    //for (foreach_auto(Widget, w, widgets)) {
+        //w.ref->screen_area = widget.area;
+    //}
 
-    ui__calculate_focus_and_draw_widgets(ctx, widgets, countof(widgets));
-}
+    //ui__calculate_focus_and_draw_widgets(ctx, widgets, countof(widgets));
+//}
 
 
 /*
@@ -773,89 +773,89 @@ int ui__calculate_focus(const Widget_view widgets) {
 */
 
 
-void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, const int count) {
+//void ui__calculate_focus_and_draw_widgets(Ctx *ctx, Widget *widgets, const int count) {
 
-    // Query focus areas.
+    //// Query focus areas.
 
-    /*
-    for (int i = 0; i < count; ++i)
-    {
-        Widget *w = &widgets[i];
-        WidgetReq req = { .focus_area_request = true };
-        w->draw_function(ctx, (WidgetDraw){ .area = w->screen_area }, &req);
+    //[>
+    //for (int i = 0; i < count; ++i)
+    //{
+        //Widget *w = &widgets[i];
+        //WidgetReq req = { .focus_area_request = true };
+        //w->draw_function(ctx, (WidgetDraw){ .area = w->screen_area }, &req);
 
-        if (req.focus_area_success) {
-            w->focus_area = req.focus_area;
-        } else {
-            printfd("WAR: Widget %d didn't respond.", i);
-            w->focus_area = w->screen_area;
-        }
-    }
-    */
+        //if (req.focus_area_success) {
+            //w->focus_area = req.focus_area;
+        //} else {
+            //printfd("WAR: Widget %d didn't respond.", i);
+            //w->focus_area = w->screen_area;
+        //}
+    //}
+    //*/
 
-    // Reset focus.
+    //// Reset focus.
 
-    for (int i = 0; i < count; ++i) {
-        Widget *w = &widgets[i];
-        w->focused = false;
-    }
+    //for (int i = 0; i < count; ++i) {
+        //Widget *w = &widgets[i];
+        //w->focused = false;
+    //}
 
-    // Calculate focus in reverse.
+    //// Calculate focus in reverse.
 
-    for (int i = count -1; i > -1; i += -1) {
-        Widget *w = &widgets[i];
-        if (Rect2i_collides_V2i(w->focus_area, GetMousePositioni())) {
-            w->focused = true;
-            break;
-        }
-    }
+    //for (int i = count -1; i > -1; i += -1) {
+        //Widget *w = &widgets[i];
+        //if (Rect2i_collides_V2i(w->focus_area, GetMousePositioni())) {
+            //w->focused = true;
+            //break;
+        //}
+    //}
 
-    // Sync draw area.
+    //// Sync draw area.
 
-    for (int i = 0; i < count; ++i) {
-        Widget *w = &widgets[i];
-        w->draw_info = (WidgetDraw) {
-            .focused = w->focused,
-            .area = w->screen_area,
-        };
-    }
+    //for (int i = 0; i < count; ++i) {
+        //Widget *w = &widgets[i];
+        //w->draw_info = (WidgetDraw) {
+            //.focused = w->focused,
+            //.area = w->screen_area,
+        //};
+    //}
 
-    // Calculate scroll.
+    //// Calculate scroll.
 
-    for (int i = 0; i < count; ++i) {
-        Widget *w = &widgets[i];
-        ui_widget_scroll(w);
-    }
+    //for (int i = 0; i < count; ++i) {
+        //Widget *w = &widgets[i];
+        //ui_widget_scroll(w);
+    //}
 
-    // Draw.
+    //// Draw.
 
-    for (int i = 0; i < count; ++i) {
-        Widget *w = &widgets[i];
+    //for (int i = 0; i < count; ++i) {
+        //Widget *w = &widgets[i];
 
-        // Prepare some request to get some info about these widgets.
+        //// Prepare some request to get some info about these widgets.
 
-        WidgetReq req = {
-            .focus_area_request = true,
-            .scroll_max_px_request = w->scroll_enabled,
-        };
+        //WidgetReq req = {
+            //.focus_area_request = true,
+            //.scroll_max_px_request = w->scroll_enabled,
+        //};
 
-        // Finally draw on screen.
+        //// Finally draw on screen.
 
-        w->draw_function(ctx, w->draw_info, &req);
+        //w->draw_function(ctx, w->draw_info, &req);
 
-        // Handle query responses.
+        //// Handle query responses.
 
-        if (req.scroll_max_px_success) {
-            w->scroll_max_px = req.scroll_max_px;
-        }
-        if (req.focus_area_success) {
-            w->focus_area = req.focus_area;
-        } else {
-            printfd("WAR: Widget %d didn't respond.", i);
-            w->focus_area = w->screen_area;
-        }
-    }
-}
+        //if (req.scroll_max_px_success) {
+            //w->scroll_max_px = req.scroll_max_px;
+        //}
+        //if (req.focus_area_success) {
+            //w->focus_area = req.focus_area;
+        //} else {
+            //printfd("WAR: Widget %d didn't respond.", i);
+            //w->focus_area = w->screen_area;
+        //}
+    //}
+//}
 
 /*
 void ui_draw_all(Ctx *ctx) {
@@ -1066,9 +1066,9 @@ void ui_draw_all3(Ctx *ctx) {
 
     uitree_build_start(&tree, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()+1}});
 
-    uitree_Node con_tree = uitree_dumb_container(&tree, cstr_SL(""), widget_vlist);
+    uitree_Node con_tree = uitree_dumb_container(widget_vlist);
 
-    uitree_Node con_vlist = uitree_dumb_container(&tree, cstr_SL("MAIN_V_LIST"), widget_vlist);
+    uitree_Node con_vlist = uitree_dumb_container_id(&tree, cstr_SL("MAIN_V_LIST"), widget_vlist);
 
     {
         uitree_Node widget_config = uitree_widget(UI_WIDGET_OPTIONS);

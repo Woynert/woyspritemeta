@@ -9,8 +9,6 @@
 #include "quick_monitor.h"
 #include "raylib_drawbuffer.h"
 
-/*#include "map_string.h"*/
-
 #define LA_IMPLEMENTATION
 #include "la.h"
 

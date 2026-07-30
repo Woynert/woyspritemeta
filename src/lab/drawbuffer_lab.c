@@ -12,27 +12,27 @@ void draw_stuff(void) {
 
     drawbuf_set_layer(255);
     area = (Rect2i) { {0, 0, 200, 200} };
-    drawbuf_DrawRectangle(area, RED);
-    drawbuf_DrawText(cstr_SL("RED"), area.pos, 15, BLACK);
-    drawbuf_DrawText(cstr_SL("YES"), v2i(area.pos.x, area.pos.y +30), 15, BLACK);
-    drawbuf_DrawTexture(demosprite, v2i_sub(v2i_add(area.pos, area.size), v2ii(70)), WHITE);
-    drawbuf_DrawRectangleLines(area, BLACK, 2);
+    b_DrawRectangle(area, RED);
+    b_DrawText(cstr_SL("RED"), area.pos, 15, BLACK);
+    b_DrawText(cstr_SL("YES"), v2i(area.pos.x, area.pos.y +30), 15, BLACK);
+    b_DrawTexture(demosprite, v2i_sub(v2i_add(area.pos, area.size), v2ii(70)), WHITE);
+    b_DrawRectangleLines(area, BLACK, 2);
 
     drawbuf_set_layer(200);
     area = (Rect2i) { {50, 50, 200, 200} };
-    drawbuf_DrawRectangle(area, BLUE);
-    drawbuf_DrawText(cstr_SL("BLUE"), area.pos, 15, BLACK);
-    drawbuf_DrawText(cstr_SL("YES"), v2i(area.pos.x, area.pos.y +30), 15, BLACK);
-    drawbuf_DrawTexture(demosprite, v2i_sub(v2i_add(area.pos, area.size), v2ii(70)), WHITE);
-    drawbuf_DrawRectangleLines(area, BLACK, 2);
+    b_DrawRectangle(area, BLUE);
+    b_DrawText(cstr_SL("BLUE"), area.pos, 15, BLACK);
+    b_DrawText(cstr_SL("YES"), v2i(area.pos.x, area.pos.y +30), 15, BLACK);
+    b_DrawTexture(demosprite, v2i_sub(v2i_add(area.pos, area.size), v2ii(70)), WHITE);
+    b_DrawRectangleLines(area, BLACK, 2);
 
     drawbuf_set_layer(0);
     area = (Rect2i) { {100, 100, 200, 200} };
-    drawbuf_DrawRectangle(area, YELLOW);
-    drawbuf_DrawText(cstr_SL("YELLOW"), area.pos, 15, BLACK);
-    drawbuf_DrawText(cstr_SL("YES"), v2i(area.pos.x, area.pos.y +30), 15, BLACK);
-    drawbuf_DrawTexture(demosprite, v2i_sub(v2i_add(area.pos, area.size), v2ii(70)), WHITE);
-    drawbuf_DrawRectangleLines(area, BLACK, 2);
+    b_DrawRectangle(area, YELLOW);
+    b_DrawText(cstr_SL("YELLOW"), area.pos, 15, BLACK);
+    b_DrawText(cstr_SL("YES"), v2i(area.pos.x, area.pos.y +30), 15, BLACK);
+    b_DrawTexture(demosprite, v2i_sub(v2i_add(area.pos, area.size), v2ii(70)), WHITE);
+    b_DrawRectangleLines(area, BLACK, 2);
 
     drawbuf_draw_all();
 }
