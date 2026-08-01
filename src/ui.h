@@ -209,7 +209,13 @@ void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx
     }
 }
 
-// Only two children supported.
+void widget_vsplit_set_user_default_state(Uitree *tree, uitree_Node *node, int p_percentage) {
+    uitree_WidgetState *state = arena_new(&tree->arena, uitree_WidgetState, 1);
+    if (state == NULL) { return; }
+    int *percentage = &state->int_a;
+    *percentage = p_percentage - 50;
+    node->user_default_state = state;
+}
 void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
     const int pad = 2;
     float percentage = (float)(state->int_a + 50) / 100.f;
@@ -242,8 +248,63 @@ void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ct
 
     if (child_count > 2) { printfd("WAR: Too many children."); }
 }
+void ui_widget_vsplit(Ctx *ctx, uitree_DrawInfo info) {
+
+    Rect2i area = info.area;
+
+    if (winput_wheel() != 0) {
+        info.state->int_a -= int_sign((int)winput_wheel()) * 3;
+        info.state->int_a = int_clamp(-40, 40, info.state->int_a);
+        // ↑↑↑ This ensures at least 10% is visible at minimum.
+    }
+
+    b_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
+
+    b_DrawRectangleLines(area, BLUE, 8);
+}
+void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
+
+    Rect2i area = info.area;
+    Rect2i drag_area = info.state->rect_a;
+    int *is_dragging = &info.state->int_b;
+
+    if (CheckCollisionPointReci(GetMousePositioni(), drag_area) || *is_dragging) {
+        b_DrawRectangle(drag_area, ORANGE);
+        if (winput_mice_pressed(MouseLeft)) {
+            *is_dragging = true;
+        }
+    }
+
+    if (*is_dragging) {
+
+        int mouse_y = GetMousePositioni().y;
+        float factor = ((float)mouse_y - ((float)area.y + (float)area.height / 2.0f)) / (float)area.height;
+        printfd("FACTOR %f", factor);
+        info.state->int_a = (int)(factor * 100.0f);
+        info.state->int_a = int_clamp(-40, 40, info.state->int_a);
+        // ↑↑↑ This ensures at least 10% is visible at minimum.
+
+        if (winput_mice_released(MouseLeft)) {
+            *is_dragging = false;
+        }
+    }
+
+    b_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
+}
 
 
+
+void widget_3hsplit_set_user_default_state(Uitree *tree, uitree_Node *node, int p_percentage1, int p_percentage2) {
+    uitree_WidgetState *state = arena_new(&tree->arena, uitree_WidgetState, 1);
+    if (state == NULL) { return; }
+    int *percentage1 = &state->int_a;
+    int *percentage2 = &state->int_b;
+    int *is_setup = &state->int_d;
+    *percentage1 = p_percentage1;
+    *percentage2 = p_percentage2;
+    *is_setup = true;
+    node->user_default_state = state;
+}
 void widget_3hsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
     (void)user_ctx;
     const int pad = 2;
@@ -289,7 +350,63 @@ void widget_3hsplit(Rect2i area, int child_count, Rect2i *children, void *user_c
     };
     if (child_count > 3) { printfd("WAR: Too many children."); }
 }
+void ui_widget_3hsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
 
+    enum { NOT_DRAGGING, IS_DRAGGING_1ND, IS_DRAGGING_2ND };
+
+    const int PAD = 2;
+    Rect2i area = info.area;
+    Rect2i *drag_area1 = &info.state->rect_a;
+    Rect2i *drag_area2 = &info.state->rect_b;
+    int *percentage1 = &info.state->int_a;
+    int *percentage2 = &info.state->int_b;
+    int *is_dragging = &info.state->int_c;
+    int *is_setup = &info.state->int_d;
+    if (!*is_setup) {
+        *is_setup = true;
+        *percentage1 = 33;
+        *percentage2 = 66;
+    }
+
+    if (*percentage2 == 0) { *percentage2 = 50; }
+
+    if (CheckCollisionPointReci(GetMousePositioni(), *drag_area1) || (*is_dragging == IS_DRAGGING_1ND)) {
+        b_DrawRectangle(*drag_area1, BLUE);
+        if (winput_mice_pressed(MouseLeft)) {
+            *is_dragging = IS_DRAGGING_1ND;
+        }
+    }
+
+    else if (CheckCollisionPointReci(GetMousePositioni(), *drag_area2) || (*is_dragging == IS_DRAGGING_2ND)) {
+        b_DrawRectangle(*drag_area2, RED);
+        if (winput_mice_pressed(MouseLeft)) {
+            *is_dragging = IS_DRAGGING_2ND;
+        }
+    }
+
+    if (*is_dragging == IS_DRAGGING_1ND) {
+        int mouse_x = GetMousePositioni().x;
+        float factor = ((float)mouse_x - (float)area.x) / (float)area.width;
+        printfd("FACTOR %f", factor);
+        *percentage1 = (int)(factor * 100.0f);
+        *percentage1 = int_clamp(PAD, *percentage2 - PAD, *percentage1);
+    }
+    if (*is_dragging == IS_DRAGGING_2ND) {
+        int mouse_x = GetMousePositioni().x;
+        //float factor = ((float)mouse_x - ((float)area.x + (float)area.width / 1.0f)) / (float)area.width;
+        float factor = ((float)mouse_x - (float)area.x) / (float)area.width;
+        printfd("FACTOR %f", factor);
+        *percentage2 = (int)(factor * 100.0f);
+        *percentage2 = int_clamp(*percentage1 + PAD, 100 - PAD, *percentage2);
+    }
+    printfd("FACTOR percentage1 %d percentage2 %d", *percentage1, *percentage2);
+
+    if (*is_dragging != NOT_DRAGGING && winput_mice_released(MouseLeft)) {
+        *is_dragging = NOT_DRAGGING;
+    }
+
+    b_ui_draw_text(ctx, cstr(TextFormat("%d:%d", *percentage1, *percentage2)), v2i_add(area.pos, v2ii(3)), GREEN);
+}
 
 void ui_widget_scroll(Widget *widget) {
     if (!widget->scroll_enabled) { return; }
@@ -395,108 +512,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
 }
 
 
-void ui_widget_vsplit(Ctx *ctx, uitree_DrawInfo info) {
 
-    Rect2i area = info.area;
-
-    if (winput_wheel() != 0) {
-        info.state->int_a -= int_sign((int)winput_wheel()) * 3;
-        info.state->int_a = int_clamp(-40, 40, info.state->int_a);
-        // ↑↑↑ This ensures at least 10% is visible at minimum.
-    }
-
-    b_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
-
-    b_DrawRectangleLines(area, BLUE, 8);
-}
-
-void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
-
-    Rect2i area = info.area;
-    Rect2i drag_area = info.state->rect_a;
-    int *is_dragging = &info.state->int_b;
-
-    if (CheckCollisionPointReci(GetMousePositioni(), drag_area) || *is_dragging) {
-        b_DrawRectangle(drag_area, ORANGE);
-        if (winput_mice_pressed(MouseLeft)) {
-            *is_dragging = true;
-        }
-    }
-
-    if (*is_dragging) {
-
-        int mouse_y = GetMousePositioni().y;
-        float factor = ((float)mouse_y - ((float)area.y + (float)area.height / 2.0f)) / (float)area.height;
-        printfd("FACTOR %f", factor);
-        info.state->int_a = (int)(factor * 100.0f);
-        info.state->int_a = int_clamp(-40, 40, info.state->int_a);
-        // ↑↑↑ This ensures at least 10% is visible at minimum.
-
-        if (winput_mice_released(MouseLeft)) {
-            *is_dragging = false;
-        }
-    }
-
-    b_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
-}
-
-void ui_widget_3hsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
-
-    enum { NOT_DRAGGING, IS_DRAGGING_1ND, IS_DRAGGING_2ND };
-
-    const int PAD = 2;
-    Rect2i area = info.area;
-    Rect2i *drag_area1 = &info.state->rect_a;
-    Rect2i *drag_area2 = &info.state->rect_b;
-    int *percentage1 = &info.state->int_a;
-    int *percentage2 = &info.state->int_b;
-    int *is_dragging = &info.state->int_c;
-    int *is_setup = &info.state->int_d;
-    if (!*is_setup) {
-        *is_setup = true;
-        *percentage1 = 33;
-        *percentage2 = 66;
-    }
-
-    if (*percentage2 == 0) { *percentage2 = 50; }
-
-    if (CheckCollisionPointReci(GetMousePositioni(), *drag_area1) || (*is_dragging == IS_DRAGGING_1ND)) {
-        b_DrawRectangle(*drag_area1, BLUE);
-        if (winput_mice_pressed(MouseLeft)) {
-            *is_dragging = IS_DRAGGING_1ND;
-        }
-    }
-
-    else if (CheckCollisionPointReci(GetMousePositioni(), *drag_area2) || (*is_dragging == IS_DRAGGING_2ND)) {
-        b_DrawRectangle(*drag_area2, RED);
-        if (winput_mice_pressed(MouseLeft)) {
-            *is_dragging = IS_DRAGGING_2ND;
-        }
-    }
-
-    if (*is_dragging == IS_DRAGGING_1ND) {
-        int mouse_x = GetMousePositioni().x;
-        float factor = ((float)mouse_x - (float)area.x) / (float)area.width;
-        printfd("FACTOR %f", factor);
-        *percentage1 = (int)(factor * 100.0f);
-        *percentage1 = int_clamp(PAD, *percentage2 - PAD, *percentage1);
-    }
-    if (*is_dragging == IS_DRAGGING_2ND) {
-        int mouse_x = GetMousePositioni().x;
-        //float factor = ((float)mouse_x - ((float)area.x + (float)area.width / 1.0f)) / (float)area.width;
-        float factor = ((float)mouse_x - (float)area.x) / (float)area.width;
-        printfd("FACTOR %f", factor);
-        *percentage2 = (int)(factor * 100.0f);
-        *percentage2 = int_clamp(*percentage1 + PAD, 100 - PAD, *percentage2);
-    }
-    printfd("FACTOR percentage1 %d percentage2 %d", *percentage1, *percentage2);
-
-    if (*is_dragging != NOT_DRAGGING && winput_mice_released(MouseLeft)) {
-        *is_dragging = NOT_DRAGGING;
-    }
-
-    b_ui_draw_text(ctx, cstr(TextFormat("%d:%d", *percentage1, *percentage2)), v2i_add(area.pos, v2ii(3)), GREEN);
-}
 
 void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
 
@@ -999,15 +1015,21 @@ void ui_draw_all(Ctx *ctx) {
     {
         uitree_Node con_3split = uitree_container(&tree, cstr_SL("MainHSplit"),
                 widget_3hsplit, UI_WIDGET_3HSPLIT_DRAG);
+        widget_3hsplit_set_user_default_state(&tree, &con_3split, 10, 90);
 
         {
             {
                 uitree_Node con_vsplit = uitree_container(&tree, cstr_SL("FirstVsplit"),
                     widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
+                widget_vsplit_set_user_default_state(&tree, &con_vsplit, 10);
 
                 {
-                    widget = uitree_widget(UI_WIDGET_OPTIONS);
-                    uitree_container_add_child(&tree, &con_vsplit, widget);
+                    {
+                        uitree_Node con_stack = uitree_container_dumb(widget_stack);
+                        widget = uitree_widget(UI_WIDGET_OPTIONS);
+                        uitree_container_add_child(&tree, &con_stack, widget);
+                        uitree_container_add_child(&tree, &con_vsplit, con_stack);
+                    }
 
                     widget = uitree_widget_id(&tree, UI_WIDGET_SPRITE_LIST, cstr_SL("WidgetSpriteList"));
                     uitree_container_add_child(&tree, &con_vsplit, widget);
@@ -1022,6 +1044,7 @@ void ui_draw_all(Ctx *ctx) {
             {
                 uitree_Node con_vsplit = uitree_container(&tree, cstr_SL("SecondVsplit"),
                     widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
+                widget_vsplit_set_user_default_state(&tree, &con_vsplit, 80);
 
                 {
                     widget = uitree_widget_id(&tree, UI_WIDGET_SPRITESHEET_LIST, cstr_SL("SpriteSheetList"));

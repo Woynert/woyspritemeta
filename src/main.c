@@ -47,13 +47,13 @@ int main(void) {
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(init_win_w, init_win_h, "woyspritemeta");
-    drawbuf_init();
 
     // Post InitWindow setup:
 
     SetTargetFPS(30);
     SetExitKey(KEY_NULL);
 
+    drawbuf_init();
     hook_glfw_callbacks(&ctx);
     ctx_load_assets(&ctx);
 

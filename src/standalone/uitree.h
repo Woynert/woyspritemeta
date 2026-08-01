@@ -65,10 +65,14 @@ typedef struct uitree_Node {
     struct {
         void *user_ctx; // User can set this to access it later on 'container_func' call.
         uitree_Vec_Node children;
-        //ContainerType type;
     } container;
 
     Rect2i _area; // Used to hold the area momentarily during end_tree.
+
+    struct {
+        // If not NULL then it'll be used as default.
+        uitree_WidgetState *user_default_state;
+    };
 } uitree_Node;
 
 #define DYNA__TYPE uitree_Node
@@ -138,27 +142,35 @@ void uitree__print_tree(Uitree *t, uitree_Node *node, int level) {
     }
 }
 
-
 /// @Returns state or NULL.
-uitree_WidgetState * uitree__try_get_saved_state(Uitree *t, strview_t key) {
-    if (key.size == 0) {
-        // No key means no state, sorry.
-        return NULL;
-    }
+uitree_WidgetState * uitree__try_get_saved_state(Uitree *t, strview_t key, uitree_Node *node) {
+    if (key.size == 0 || key.data == NULL) { return NULL; } // No key means no state, sorry.
     uitree_WidgetState *state = uitree_Map_str_state_get(&t->title_to_state, key);
+    bool reset_state = false;
     if (state == NULL) {
         int err = uitree_Map_str_state_upsert(&t->title_to_state, key, (uitree_WidgetState) {0});
-        if (err != 0) { return NULL; }
+        if (err != 0) { state = NULL; goto skip; }
         state = uitree_Map_str_state_get(&t->title_to_state, key);
+        reset_state = true;
     } else if ((t->frame - state->__last_frame) > 1) { // Note: Maybe this should go in the cleanup function.
         printfd(ANSI_RED"INFO: (%"PRIstr") Resetting this old state. got %d expected %d", PRIstrarg(key), state->__last_frame, t->frame);
         *state = (uitree_WidgetState) {0};
+        reset_state = true;
     } else {
-        //printfd(ANSI_GRE"INFO: (%"PRIstr") State. got %d expected %d", PRIstrarg(key), state->__last_frame, t->frame);
+        // This case means we successfully found some previously saved state.
     }
-    state->__last_frame = t->frame;
+    skip:
+    if (state != NULL) {
+        if (reset_state && node->user_default_state != NULL) {
+            *state = *node->user_default_state;
+        }
+        state->__last_frame = t->frame;
+    } else {
+        state = &t->state_non_persistent;
+    }
     return state;
 }
+
 
 #define DYNA__TYPE int
 #define DYNA__NAMESPACE Vec_oldkeys
@@ -231,7 +243,7 @@ void uitree_build_end(Uitree *t) {
                 Rect2i *children_areas = arena_new(&arena_tmp, Rect2i, new_item.node->container.children.size);
                 if (new_item.node->container_func != NULL) {
                     strview_t identifier = strpool_get(&t->strpool, new_item.node->identifier_strpool_id);
-                    uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier);
+                    uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier, new_item.node);
                     state = state ? state : &t->state_non_persistent;
                     new_item.node->container_func(new_item.node->_area, new_item.node->container.children.size, children_areas, new_item.node->container.user_ctx, state);
                     for (int i = 0; i < new_item.node->container.children.size; ++i) {
@@ -268,7 +280,7 @@ void uitree_build_end(Uitree *t) {
 
                     // Check if we have state for this one.
 
-                    uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier);
+                    uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier, node);
                     state = state ? state : &t->state_non_persistent;
                     uitree_DrawInfo draw_info = {
                         .user_draw_func_id = node->user_draw_func_id,
