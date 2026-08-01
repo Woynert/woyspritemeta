@@ -137,9 +137,15 @@ void uitree__print_tree(Uitree *t, uitree_Node *node, int level) {
     }
 }
 
-/// @Returns state or NULL.
+/// @Returns state, never NULL.
 uitree_WidgetState * uitree__try_get_saved_state(Uitree *t, strview_t key, uitree_Node *node) {
-    if (key.size == 0 || key.data == NULL) { return NULL; } // No key means no state, sorry.
+    if (key.size == 0 || key.data == NULL) { // No key means no state, sorry.
+        if (node->user_default_state != NULL) {
+            return node->user_default_state;
+        } else {
+            return &t->state_non_persistent;
+        }
+    }
     uitree_WidgetState *state = uitree_Map_str_state_get(&t->title_to_state, key);
     bool reset_state = false;
     if (state == NULL) {
@@ -161,7 +167,12 @@ uitree_WidgetState * uitree__try_get_saved_state(Uitree *t, strview_t key, uitre
         }
         state->__last_frame = t->frame;
     } else {
-        state = &t->state_non_persistent;
+        // This allows dumb containers to have default state without requiring ID.
+        if (node->user_default_state != NULL) {
+            state = node->user_default_state;
+        } else {
+            state = &t->state_non_persistent;
+        }
     }
     return state;
 }
@@ -239,7 +250,7 @@ void uitree_build_end(Uitree *t) {
                 if (new_item.node->container_func != NULL) {
                     strview_t identifier = strpool_get(&t->strpool, new_item.node->identifier_strpool_id);
                     uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier, new_item.node);
-                    state = state ? state : &t->state_non_persistent;
+                    wassert(state != NULL);
                     new_item.node->container_func(new_item.node->_area, new_item.node->container.children.size, children_areas, new_item.node->container.user_ctx, state);
                     for (int i = 0; i < new_item.node->container.children.size; ++i) {
                         new_item.node->container.children.items[i]._area = children_areas[i];
@@ -276,7 +287,6 @@ void uitree_build_end(Uitree *t) {
                     // Check if we have state for this one.
 
                     uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier, node);
-                    state = state ? state : &t->state_non_persistent;
                     uitree_DrawInfo draw_info = {
                         .user_draw_func_id = node->user_draw_func_id,
                         .area = node->_area,

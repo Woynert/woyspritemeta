@@ -27,7 +27,6 @@ X( UI_WIDGET_SPRITESHEET_LIST     , ui_widget_spritesheet_list     ) \
 X( UI_WIDGET_SPRITESHEET_VIEWPORT , ui_widget_spritesheet_viewport ) \
 X( UI_WIDGET_SPRITESHEET_CURSORS  , ui_widget_spritesheet_cursors  ) \
 X( UI_WIDGET_SPRITESHEET_HINTS    , ui_widget_spritesheet_hints    ) \
-X( UI_WIDGET_VSPLIT               , ui_widget_vsplit               ) \
 X( UI_WIDGET_VSPLIT_DRAG          , ui_widget_vsplit_drag          ) \
 X( UI_WIDGET_3HSPLIT_DRAG         , ui_widget_3hsplit_drag         )
 
@@ -209,64 +208,71 @@ void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx
     }
 }
 
-void widget_vsplit_set_user_default_state(Uitree *tree, uitree_Node *node, int p_percentage) {
+void widget_vsplit_set_user_default_state(Uitree *tree, uitree_Node *node, int size, bool p_is_percentage_or_px) {
+    const int PAD = 2;
     uitree_WidgetState *state = arena_new(&tree->arena, uitree_WidgetState, 1);
     if (state == NULL) { return; }
-    int *percentage = &state->int_a;
-    *percentage = p_percentage - 50;
+    int *size_value = &state->int_a;
+    int *is_percentage_or_px = &state->int_c;
+    *is_percentage_or_px = p_is_percentage_or_px;
+    if (p_is_percentage_or_px == 0) {
+        *size_value = size - 50; // %
+    } else {
+        *size_value = size + PAD;      // px
+    }
     node->user_default_state = state;
 }
 void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
-    const int pad = 2;
-    float percentage = (float)(state->int_a + 50) / 100.f;
+    const int PAD = 2;
+    const int *size_value = &state->int_a;
+    const int *is_percentage_or_px = &state->int_c;
+    int first_child_height;
+
+    // Determines whether the sizes are percentages (relative) or pixels (absolute).
+    if (*is_percentage_or_px == 0) {
+        float percentage = (float)(*size_value + 50) / 100.f;
+        first_child_height = (int)((float)area.height * percentage);
+    } else {
+        first_child_height = *size_value;
+    }
     (void)user_ctx;
 
     if (child_count > 0) {
         Rect2i *child = &children[0];
         child->width = area.width;
         child->x = area.x;
-        child->height = (int)((float)area.height * percentage);
+        child->height = first_child_height;
         child->y = area.y;
     }
     if (child_count > 1) {
         Rect2i *child = &children[1];
         child->width = area.width;
         child->x = area.x;
-        child->height = (int)((float)area.height * (1.0f - percentage));
+        child->height = area.height - children[0].height;
         child->y = area.y + children[0].height;
     }
-    children[0] = Rect2i_add_padding_all(children[0], pad);
-    children[1] = Rect2i_add_padding_all(children[1], pad);
+    children[0] = Rect2i_add_padding_all(children[0], PAD);
+    children[1] = Rect2i_add_padding_all(children[1], PAD);
 
     // This rect will be used for dragging.
     state->rect_a = (Rect2i) {
         .x      = children[0].x,
         .width  = children[0].width,
         .y      = children[0].y + children[0].height,
-        .height = pad * 2,
+        .height = PAD * 2,
     };
 
     if (child_count > 2) { printfd("WAR: Too many children."); }
 }
-void ui_widget_vsplit(Ctx *ctx, uitree_DrawInfo info) {
 
-    Rect2i area = info.area;
 
-    if (winput_wheel() != 0) {
-        info.state->int_a -= int_sign((int)winput_wheel()) * 3;
-        info.state->int_a = int_clamp(-40, 40, info.state->int_a);
-        // ↑↑↑ This ensures at least 10% is visible at minimum.
-    }
-
-    b_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
-
-    b_DrawRectangleLines(area, BLUE, 8);
-}
 void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
 
     Rect2i area = info.area;
     Rect2i drag_area = info.state->rect_a;
     int *is_dragging = &info.state->int_b;
+    int *size = &info.state->int_a;
+    const int *is_percentage_or_px = &info.state->int_c;
 
     if (CheckCollisionPointReci(GetMousePositioni(), drag_area) || *is_dragging) {
         b_DrawRectangle(drag_area, ORANGE);
@@ -278,18 +284,25 @@ void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
     if (*is_dragging) {
 
         int mouse_y = GetMousePositioni().y;
-        float factor = ((float)mouse_y - ((float)area.y + (float)area.height / 2.0f)) / (float)area.height;
-        printfd("FACTOR %f", factor);
-        info.state->int_a = (int)(factor * 100.0f);
-        info.state->int_a = int_clamp(-40, 40, info.state->int_a);
-        // ↑↑↑ This ensures at least 10% is visible at minimum.
+
+        if (*is_percentage_or_px == 0) {
+            float factor = ((float)mouse_y - ((float)area.y + (float)area.height / 2.0f)) / (float)area.height;
+            printfd("FACTOR %f", factor);
+            *size = (int)(factor * 100.0f);
+            *size = int_clamp(-45, 45, *size);
+        } else {
+            float factor = ((float)mouse_y - (float)area.y) / (float)area.height;
+            *size = (int)(factor * (float)area.height);
+            *size = int_clamp(30, area.height-30, *size);
+        }
+        // ↑↑↑ This ensures at least a % is visible at minimum.
 
         if (winput_mice_released(MouseLeft)) {
             *is_dragging = false;
         }
     }
 
-    b_ui_draw_text(ctx, cstr(TextFormat("%d", info.state->int_a)), v2i_add(area.pos, v2ii(3)), GREEN);
+    b_ui_draw_text(ctx, cstr(TextFormat("%d", *size)), v2i_add(area.pos, v2ii(3)), GREEN);
 }
 
 
@@ -1034,9 +1047,8 @@ void ui_draw_all(Ctx *ctx) {
 
         {
             {
-                uitree_Node con_vsplit = uitree_container(t, cstr_SL("FirstVsplit"),
-                    widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
-                widget_vsplit_set_user_default_state(t, &con_vsplit, 10);
+                uitree_Node con_vsplit = uitree_container_dumb(widget_vsplit);
+                widget_vsplit_set_user_default_state(t, &con_vsplit, ctx->draw.line_height, true);
 
                 {
                     {
@@ -1059,7 +1071,7 @@ void ui_draw_all(Ctx *ctx) {
             {
                 uitree_Node con_vsplit = uitree_container(t, cstr_SL("SecondVsplit"),
                     widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
-                widget_vsplit_set_user_default_state(t, &con_vsplit, 80);
+                widget_vsplit_set_user_default_state(t, &con_vsplit, 80, false);
 
                 {
                     widget = uitree_widget_id(t, UI_WIDGET_SPRITESHEET_LIST, cstr_SL("SpriteSheetList"));
