@@ -470,47 +470,61 @@ void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, int scale, 
 }
 
 void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
-
-    Rect2i area = info.area;
-    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), area);
+    const int PAD = 2;
     const int line_height = ctx->draw.line_height;
-    int line = 0;
-    V2i pos = { 0 };
-    const int pad = 10;
+    const Rect2i area = info.area;
+    int *is_menu_open = &info.state->int_a;
+    bool mouse_in_options_btn = false;
 
-    pos = (V2i) {{ area.x + pad, area.y + line * line_height }};
-    ++line;
+    {
+        Rect2i btn_area = { .x = area.x, .y = area.y, .width = area.width, .height = line_height };
+        mouse_in_options_btn = CheckCollisionPointReci(GetMousePositioni(), btn_area);
+        b_DrawRectangle(btn_area, DEFAULT_BG);
+        if (mouse_in_options_btn) {
+            b_DrawRectangle(btn_area, BLUE);
+            if (winput_mice_pressed(MouseLeft)) {
+                *is_menu_open = !*is_menu_open;
+            }
+        }
+        b_DrawRectangleLines(btn_area, MAGENTA, 1);
+        b_ui_draw_text(ctx, cstr_SL("Options"), (V2i){{ area.pos.x + PAD, area.pos.y }}, DEFAULT_FG);
+    }
 
-    Rect2i line_area = {{ pos.x, pos.y, area.width -pad, line_height }};
-    line_area.y += line_height;
 
-    b_BeginScissorMode(area);
-    b_DrawRectangle(area, DEFAULT_BG);
-    b_ui_draw_text(ctx, cstr_SL("Options:"), pos, DEFAULT_FG);
+    if (!*is_menu_open) { return; }
+
+    // Drawing menu.
+
+    Rect2i menu_area = { .x = area.x, .y = area.y + line_height, .height = line_height * ctx->actions.size, .width = 400, };
+    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), menu_area);
+    Rect2i line_area;
+    b_BeginScissorMode(menu_area);
+    b_DrawRectangle(menu_area, DEFAULT_BG);
 
     for (int i = 0; i < ctx->actions.size; ++i)
     {
         Action *action = &ctx->actions.items[i];
-        pos = (V2i) {{ (int)area.x + pad, (int)area.y + line * ctx->draw.line_height }};
+        line_area = (Rect2i) {{
+            .x = menu_area.x, .y = menu_area.y + i * ctx->draw.line_height,
+            .width = menu_area.width, .height = line_height
+        }};
 
         if (mouse_focus && CheckCollisionPointReci(GetMousePositioni(), line_area)) {
             b_DrawRectangle(line_area, BLUE);
 
             if (winput_mice_pressed(MouseLeft)) {
                 call_action(ctx, action);
+                *is_menu_open = false;
             }
         }
 
-        b_ui_draw_text(ctx, strbuf_view2(action->name), pos, DEFAULT_FG);
-
-        ++line;
-        line_area.y += line_height;
+        b_ui_draw_text(ctx, strbuf_view2(action->name), (V2i){{ line_area.pos.x+PAD, line_area.pos.y }}, DEFAULT_FG);
     }
+    if (!mouse_in_options_btn && winput_mice_pressed(MouseLeft)) { *is_menu_open = false; }
 
-    b_DrawRectangleLines(area, MAGENTA, 1);
+    b_DrawRectangleLines(menu_area, BLACK, 1);
     b_EndScissorMode();
 }
-
 
 
 
@@ -1001,77 +1015,78 @@ void (*widget_func[]) (Ctx *ctx, uitree_DrawInfo info) = {
 void ui_draw_all(Ctx *ctx) {
 
     static Uitree tree = { 0 };
+    static Uitree *t = &tree;
     static bool setup = false;
     if (!setup) {
         setup = true;
-        uitree_create(&tree);
+        uitree_create(t);
     }
 
-    uitree_build_start(&tree, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()}});
+    uitree_build_start(t, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()}});
 
     uitree_Node widget;
     uitree_Node con_tree = uitree_container_dumb(widget_vlist);
 
     {
-        uitree_Node con_3split = uitree_container(&tree, cstr_SL("MainHSplit"),
+        uitree_Node con_3split = uitree_container(t, cstr_SL("MainHSplit"),
                 widget_3hsplit, UI_WIDGET_3HSPLIT_DRAG);
-        widget_3hsplit_set_user_default_state(&tree, &con_3split, 10, 90);
+        widget_3hsplit_set_user_default_state(t, &con_3split, 10, 90);
 
         {
             {
-                uitree_Node con_vsplit = uitree_container(&tree, cstr_SL("FirstVsplit"),
+                uitree_Node con_vsplit = uitree_container(t, cstr_SL("FirstVsplit"),
                     widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
-                widget_vsplit_set_user_default_state(&tree, &con_vsplit, 10);
+                widget_vsplit_set_user_default_state(t, &con_vsplit, 10);
 
                 {
                     {
                         uitree_Node con_stack = uitree_container_dumb(widget_stack);
-                        widget = uitree_widget(UI_WIDGET_OPTIONS);
-                        uitree_container_add_child(&tree, &con_stack, widget);
-                        uitree_container_add_child(&tree, &con_vsplit, con_stack);
+                        widget = uitree_widget_id(t, UI_WIDGET_OPTIONS, cstr_SL("options"));
+                        uitree_container_add_child(t, &con_stack, widget);
+                        uitree_container_add_child(t, &con_vsplit, con_stack);
                     }
 
-                    widget = uitree_widget_id(&tree, UI_WIDGET_SPRITE_LIST, cstr_SL("WidgetSpriteList"));
-                    uitree_container_add_child(&tree, &con_vsplit, widget);
+                    widget = uitree_widget_id(t, UI_WIDGET_SPRITE_LIST, cstr_SL("WidgetSpriteList"));
+                    uitree_container_add_child(t, &con_vsplit, widget);
                 }
 
-                uitree_container_add_child(&tree, &con_3split, con_vsplit);
+                uitree_container_add_child(t, &con_3split, con_vsplit);
             }
 
-            widget = ui_widget_spritesheet(&tree);
-            uitree_container_add_child(&tree, &con_3split, widget);
+            widget = ui_widget_spritesheet(t);
+            uitree_container_add_child(t, &con_3split, widget);
 
             {
-                uitree_Node con_vsplit = uitree_container(&tree, cstr_SL("SecondVsplit"),
+                uitree_Node con_vsplit = uitree_container(t, cstr_SL("SecondVsplit"),
                     widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
-                widget_vsplit_set_user_default_state(&tree, &con_vsplit, 80);
+                widget_vsplit_set_user_default_state(t, &con_vsplit, 80);
 
                 {
-                    widget = uitree_widget_id(&tree, UI_WIDGET_SPRITESHEET_LIST, cstr_SL("SpriteSheetList"));
-                    uitree_container_add_child(&tree, &con_vsplit, widget);
+                    widget = uitree_widget_id(t, UI_WIDGET_SPRITESHEET_LIST, cstr_SL("SpriteSheetList"));
+                    uitree_container_add_child(t, &con_vsplit, widget);
 
                     widget = uitree_widget(UI_WIDGET_SPRITE_PREVIEW);
-                    uitree_container_add_child(&tree, &con_vsplit, widget);
+                    uitree_container_add_child(t, &con_vsplit, widget);
                 }
 
-                uitree_container_add_child(&tree, &con_3split, con_vsplit);
+                uitree_container_add_child(t, &con_3split, con_vsplit);
             }
         }
-        uitree_container_add_child(&tree, &con_tree, con_3split);
+        uitree_container_add_child(t, &con_tree, con_3split);
     }
 
-    tree.root_node = con_tree;
-    uitree_build_end(&tree);
+    t->root_node = con_tree;
+    uitree_build_end(t);
 
     uitree_List_DrawInfo_It it = { 0 };
-    while(uitree_List_DrawInfo_it_next(&tree.out_draw_list, &it)) {
+    while(uitree_List_DrawInfo_it_next(&t->out_draw_list, &it)) {
         uitree_DrawInfo draw = *it.item;
         drawbuf_set_layer((uint8_t)draw.layer);
         widget_func[it.item->user_draw_func_id](ctx, draw);
     }
     drawbuf_draw_all();
 
-    printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (tree.arena.end - tree.arena.beg)), PRIbytearg(1 << 20));
+    printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (t->arena.end - t->arena.beg)), PRIbytearg(1 << 20));
 }
 
 #endif // !UI

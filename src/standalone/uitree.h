@@ -125,17 +125,12 @@ void uitree__print_tree(Uitree *t, uitree_Node *node, int level) {
     }
     printf("%s", node->is_container ? "Container" : "Widget");
 
-    if (!node->is_container) {
-        printf("\n");
-        return;
-    }
-
-    //printf(" type:%d", node->container.type);
     strview_t identifier = strpool_get(&t->strpool, node->identifier_strpool_id);
     if (identifier.size > 0) {
         printf(" id:%"PRIstr, PRIstrarg(identifier));
     }
     printf("\n");
+    if (!node->is_container) { return; }
 
     for (int i = 0; i < node->container.children.size; ++i) {
         uitree__print_tree(t, &node->container.children.items[i], level+1);
