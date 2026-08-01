@@ -4,7 +4,6 @@
 #include "GLFW/glfw3.h"
 #include "winput.h"
 #include "state.h"
-#include "tinyfiledialogs.h"
 #include "ui.h"
 #include "quick_monitor.h"
 #include "raylib_drawbuffer.h"
@@ -69,7 +68,7 @@ int main(void) {
         // Reset arena.
         ctx.frame_arena.arena = ArenaRoot_get_arena(ctx.frame_arena.root);
 
-        ui_draw_all3(&ctx);
+        ui_draw_all(&ctx);
         editor_process_cursor_logic(&ctx);
         editor_process_delete(&ctx);
 

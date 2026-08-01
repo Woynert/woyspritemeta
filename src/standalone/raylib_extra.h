@@ -413,10 +413,7 @@ V2i Rect_fit_in_Rect_and_preserve_aspect_ratio(V2i container, V2i rect) {
 void DrawCheckerboard(Rect2i rect, Color color, int square_length) {
     int h_count = (int)ceilf(((float)rect.width / (float)square_length) / 2.f);
     int v_count = (int)ceilf(((float)rect.height / (float)square_length));
-    int h_offset = 0;
-    int h_left;
-    int v_left = rect.height;
-
+    int h_offset = 0, h_left, v_left = rect.height;
     for (int j = 0; j < v_count; ++j) {
         h_offset = !h_offset;
         h_left = rect.width - h_offset *square_length;
@@ -457,6 +454,15 @@ void Rect2i__split_horizontally(const Rect2i area, int chunk_count, Rect2i *out_
         out_chunks[i] = chunk;
         chunk.x += chunk.width;
     }
+}
+
+Rect2i Rect2i_stay_within_Rect2i(Rect2i r, Rect2i cont) {
+    // There's probably a better way of doing this, but...
+    if (r.y < cont.y) { r.y += cont.y - r.y; }
+    if (r.x < cont.x) { r.x += cont.x - r.x; }
+    if (r.x + r.width > cont.x + cont.width) { r.x += (cont.x + cont.width) - (r.x + r.width); }
+    if (r.y + r.height > cont.y + cont.height) { r.y += (cont.y + cont.height) - (r.y + r.height); }
+    return r;
 }
 
 /*

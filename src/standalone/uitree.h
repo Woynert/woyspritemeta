@@ -10,21 +10,12 @@
 #endif
 
 
-//typedef enum {
-    //ContainerRoot, [> Just has one children <]
-    //ContainerSplitH,
-    //ContainerSplitV,
-    //ContainerListH, [> Lists will render all children until one has a NULL draw_func. <]
-    //ContainerListV,
-    //ContainerStack,
-//} ContainerType;
-
-
 typedef struct uitree_WidgetState {
     int int_a;
     int int_b;
     int int_c;
     int int_d;
+    float float_a;
     Rect2i rect_a;
     Rect2i rect_b;
     int __last_frame; // Used to determine if we should persist it or forget it.
@@ -362,6 +353,18 @@ uitree_Node uitree_container(Uitree *t, strview_t id, uitree_ContainerFunc *cont
 uitree_Node uitree_widget(int user_draw_func_id) {
     return (uitree_Node) {
         .identifier_strpool_id = -1,
+        .has_user_draw_func = true,
+        .user_draw_func_id = user_draw_func_id,
+    };
+}
+
+uitree_Node uitree_widget_id(Uitree *t, int user_draw_func_id, strview_t id) {
+    int str_id = -1;
+    if (id.size > 0 && id.data != NULL) {
+        str_id = strpool_append(&t->strpool, id);
+    }
+    return (uitree_Node) {
+        .identifier_strpool_id = str_id,
         .has_user_draw_func = true,
         .user_draw_func_id = user_draw_func_id,
     };

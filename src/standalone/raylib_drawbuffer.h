@@ -15,6 +15,8 @@ typedef enum {
     DRAWCMD_RECTANGLE_LINES,
     DRAWCMD_TEXT_EX,
     DRAWCMD_TEXTURE,
+    DRAWCMD_BEGIN_SCISSOR,
+    DRAWCMD_END_SCISSOR,
 } DrawCmd;
 
 
@@ -55,10 +57,13 @@ void drawbuf_set_layer(uint8_t layer) {
     DrawBuf__currlayer = layer;
 }
 
+uint8_t drawbuf_get_layer(void) { return DrawBuf__currlayer; }
+
 typedef struct { Rect2i r; Color color; } drawbuf_t_DrawRectangle;
 typedef struct { Rect2i r; Color color; int thickness; } drawbuf_t_DrawRectangleLines;
 typedef struct { Font font; V2i position; int font_size; int spacing; int textLineSpacing; Color tint; int str_size; char str_data[]; } drawbuf_t_DrawTextEx;
 typedef struct { Texture2D texture; Rectangle source; Rectangle dest; Vector2 origin; float rotation; Color tint; } drawbuf_t_DrawTexturePro;
+typedef struct { Rect2i r; } drawbuf_t_BeginScissorMode;
 
 void drawbuf_draw_all(void) {
     for (int i = 0; i < countofi(DrawBuf.layers); ++i) {
@@ -88,6 +93,15 @@ void drawbuf_draw_all(void) {
                 {
                     drawbuf_t_DrawTexturePro *args = arenady_new(&layer->arena, drawbuf_t_DrawTexturePro, 1);
                     DrawTexturePro(args->texture, args->source, args->dest, args->origin, args->rotation, args->tint);
+                } break;
+                case DRAWCMD_BEGIN_SCISSOR:
+                {
+                    drawbuf_t_BeginScissorMode *args = arenady_new(&layer->arena, drawbuf_t_BeginScissorMode, 1);
+                    BeginScissorMode(args->r.x, args->r.y, args->r.width, args->r.height);
+                } break;
+                case DRAWCMD_END_SCISSOR:
+                {
+                    EndScissorMode();
                 } break;
             }
         }
@@ -142,6 +156,19 @@ void b_DrawTextEx(Font font, const strview_t string, V2i pos, int font_size, int
     memmove(args->str_data, string.data, (size_t)string.size);
     DrawCmd_da_append(&layer->commands, DRAWCMD_TEXT_EX);
 }
+
+void b_BeginScissorMode(Rect2i r) {
+    drawbuf_Layer *layer = &DrawBuf.layers[DrawBuf__currlayer];
+    drawbuf_t_BeginScissorMode *args = arenady_new(&layer->arena, drawbuf_t_BeginScissorMode, 1);
+    args->r = r;
+    DrawCmd_da_append(&layer->commands, DRAWCMD_BEGIN_SCISSOR);
+}
+
+void b_EndScissorMode(void) {
+    drawbuf_Layer *layer = &DrawBuf.layers[DrawBuf__currlayer];
+    DrawCmd_da_append(&layer->commands, DRAWCMD_END_SCISSOR);
+}
+
 
 // Extra functions for ease of use. ↓↓↓
 
