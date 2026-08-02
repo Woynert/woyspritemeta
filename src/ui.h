@@ -207,32 +207,48 @@ void widget_vlist(Rect2i area, int child_count, Rect2i *children, void *user_ctx
     }
 }
 
-void widget_vsplit_set_user_default_state(Uitree *tree, uitree_Node *node, int size, bool p_is_percentage_or_px) {
-    const int PAD = 2;
+typedef struct widget_vsplit_state_t {
+    float *size;
+    int *is_percentage_or_px;
+    int *is_dragging;
+    Rect2i *drag_area;
+} widget_vsplit_state_t;
+
+widget_vsplit_state_t widget_vsplit_get_state(uitree_WidgetState *state) {
+    return (widget_vsplit_state_t) {
+        .size                = &state->float_a,
+        .is_percentage_or_px = &state->int_b,
+        .is_dragging         = &state->int_c,
+        .drag_area           = &state->rect_a,
+    };
+}
+
+void widget_vsplit_set_user_default_state(Uitree *tree, uitree_Node *node, int size, bool is_percentage_or_px) {
+    const float PAD = 2;
     uitree_WidgetState *state = arena_new(&tree->arena, uitree_WidgetState, 1);
     if (state == NULL) { return; }
-    int *size_value = &state->int_a;
-    int *is_percentage_or_px = &state->int_c;
-    *is_percentage_or_px = p_is_percentage_or_px;
-    if (p_is_percentage_or_px == 0) {
-        *size_value = size - 50; // %
+    widget_vsplit_state_t vars = widget_vsplit_get_state(state);
+
+    *vars.is_percentage_or_px = is_percentage_or_px;
+    if (is_percentage_or_px == 0) {
+        *vars.size = (float)(size - 50) / 100.f; // %
     } else {
-        *size_value = size + PAD;      // px
+        *vars.size = (float)size + PAD;          // px
     }
     node->user_default_state = state;
 }
+
 void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
     const int PAD = 2;
-    const int *size_value = &state->int_a;
-    const int *is_percentage_or_px = &state->int_c;
+    const widget_vsplit_state_t vars = widget_vsplit_get_state(state);
     int first_child_height;
 
     // Determines whether the sizes are percentages (relative) or pixels (absolute).
-    if (*is_percentage_or_px == 0) {
-        float percentage = (float)(*size_value + 50) / 100.f;
-        first_child_height = (int)((float)area.height * percentage);
+    if (*vars.is_percentage_or_px == 0) {
+        //float percentage = (float)(*vars.size + 50) / 100.f;
+        first_child_height = (int)((float)area.height * (*vars.size + 0.5f));
     } else {
-        first_child_height = *size_value;
+        first_child_height = (int)*vars.size;
     }
     (void)user_ctx;
 
@@ -264,78 +280,86 @@ void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ct
     if (child_count > 2) { printfd("WAR: Too many children."); }
 }
 
-
 void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
-
+    (void)ctx;
     Rect2i area = info.area;
-    Rect2i drag_area = info.state->rect_a;
-    int *is_dragging = &info.state->int_b;
-    int *size = &info.state->int_a;
-    const int *is_percentage_or_px = &info.state->int_c;
+    widget_vsplit_state_t vars = widget_vsplit_get_state(info.state);
 
-    if (mice_in_rect(drag_area) || *is_dragging) {
-        b_DrawRectangle(drag_area, ORANGE);
+    if (mice_in_rect(*vars.drag_area) || *vars.is_dragging) {
+        b_DrawRectangle(*vars.drag_area, ORANGE);
         if (mice_pressed(MouseLeft)) {
             mice_consume(MouseLeft);
-            *is_dragging = true;
+            *vars.is_dragging = true;
         }
     }
 
-    if (*is_dragging) {
+    if (*vars.is_dragging) {
 
         int mouse_y = GetMousePositioni().y;
 
-        if (*is_percentage_or_px == 0) {
-            float factor = ((float)mouse_y - ((float)area.y + (float)area.height / 2.0f)) / (float)area.height;
-            *size = (int)(factor * 100.0f);
-            *size = int_clamp(-45, 45, *size);
+        if (*vars.is_percentage_or_px == 0) {
+            *vars.size = ((float)mouse_y - ((float)area.y + (float)area.height / 2.0f)) / (float)area.height;
+            *vars.size = float_clamp(-0.45f, 0.45f, *vars.size);
         } else {
             float factor = ((float)mouse_y - (float)area.y) / (float)area.height;
-            *size = (int)(factor * (float)area.height);
-            *size = int_clamp(30, area.height-30, *size);
+            *vars.size = factor * (float)area.height;
+            *vars.size = (float)int_clamp(30, area.height-30, (int)*vars.size);
         }
         // ↑↑↑ This ensures at least a % is visible at minimum.
 
         if (mice_released(MouseLeft)) {
-            *is_dragging = false;
+            *vars.is_dragging = false;
         }
     }
-
-    b_ui_draw_text(ctx, cstr(TextFormat("%d", *size)), v2i_add(area.pos, v2ii(3)), GREEN);
 }
 
 
+typedef struct widget_3hsplit_state_t {
+    int *is_setup;
+    int *is_dragging;
+    float *percentage1;
+    float *percentage2;
+    Rect2i *drag_area1;
+    Rect2i *drag_area2;
+} widget_3hsplit_state_t;
+
+widget_3hsplit_state_t widget_3hsplit_get_state(uitree_WidgetState *state) {
+    return (widget_3hsplit_state_t) {
+        .is_setup = &state->int_a,
+        .is_dragging = &state->int_b,
+        .percentage1 = &state->float_a,
+        .percentage2 = &state->float_b,
+        .drag_area1 = &state->rect_a,
+        .drag_area2 = &state->rect_b,
+    };
+}
 
 void widget_3hsplit_set_user_default_state(Uitree *tree, uitree_Node *node, int p_percentage1, int p_percentage2) {
     uitree_WidgetState *state = arena_new(&tree->arena, uitree_WidgetState, 1);
     if (state == NULL) { return; }
-    int *percentage1 = &state->int_a;
-    int *percentage2 = &state->int_b;
-    int *is_setup = &state->int_d;
-    *percentage1 = p_percentage1;
-    *percentage2 = p_percentage2;
-    *is_setup = true;
+    widget_3hsplit_state_t vars = widget_3hsplit_get_state(state);
     node->user_default_state = state;
+    *vars.is_setup = true;
+    *vars.percentage1 = (float)p_percentage1/100.f;
+    *vars.percentage2 = (float)p_percentage2/100.f;
 }
+
 void widget_3hsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
     (void)user_ctx;
     const int pad = 2;
-    Rect2i *drag_area1 = &state->rect_a;
-    Rect2i *drag_area2 = &state->rect_b;
-    float percentage1 = (float)state->int_a / 100.f;
-    float percentage2 = (float)state->int_b / 100.f;
+    const widget_3hsplit_state_t vars = widget_3hsplit_get_state(state);
     if (child_count > 0) {
         Rect2i *child = &children[0];
         child->height = area.height;
         child->y = area.y;
-        child->width = (int)((float)area.width * percentage1);
+        child->width = (int)((float)area.width * *vars.percentage1);
         child->x = area.x;
     }
     if (child_count > 1) {
         Rect2i *child = &children[1];
         child->height = area.height;
         child->y = area.y;
-        child->width = (int)((float)area.width * percentage2) - children[0].width;
+        child->width = (int)((float)area.width * *vars.percentage2) - children[0].width;
         child->x = children[0].x + children[0].width;
     }
     if (child_count > 2) {
@@ -348,13 +372,13 @@ void widget_3hsplit(Rect2i area, int child_count, Rect2i *children, void *user_c
     children[0] = Rect2i_add_padding_all(children[0], pad);
     children[1] = Rect2i_add_padding_all(children[1], pad);
     children[2] = Rect2i_add_padding_all(children[2], pad);
-    *drag_area1 = (Rect2i) {
+    *vars.drag_area1 = (Rect2i) {
         .y      = children[0].y,
         .height = children[0].height,
         .x      = children[0].x + children[0].width,
         .width = pad * 2,
     };
-    *drag_area2 = (Rect2i) {
+    *vars.drag_area2 = (Rect2i) {
         .y      = children[0].y,
         .height = children[0].height,
         .x      = children[1].x + children[1].width,
@@ -362,59 +386,52 @@ void widget_3hsplit(Rect2i area, int child_count, Rect2i *children, void *user_c
     };
     if (child_count > 3) { printfd("WAR: Too many children."); }
 }
+
 void ui_widget_3hsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
 
     enum { NOT_DRAGGING, IS_DRAGGING_1ND, IS_DRAGGING_2ND };
 
-    const int PAD = 2;
+    const float PAD = 0.02f;
     Rect2i area = info.area;
-    Rect2i *drag_area1 = &info.state->rect_a;
-    Rect2i *drag_area2 = &info.state->rect_b;
-    int *percentage1 = &info.state->int_a;
-    int *percentage2 = &info.state->int_b;
-    int *is_dragging = &info.state->int_c;
-    int *is_setup = &info.state->int_d;
-    if (!*is_setup) {
-        *is_setup = true;
-        *percentage1 = 33;
-        *percentage2 = 66;
+    widget_3hsplit_state_t vars = widget_3hsplit_get_state(info.state);
+
+    if (!*vars.is_setup) {
+        *vars.is_setup = true;
+        *vars.percentage1 = 0.33f;
+        *vars.percentage2 = 0.66f;
     }
 
-    if (*percentage2 == 0) { *percentage2 = 50; }
+    if (*vars.percentage2 == 0) { *vars.percentage2 = 50; }
 
-    if (mice_in_rect(*drag_area1) || (*is_dragging == IS_DRAGGING_1ND)) {
-        b_DrawRectangle(*drag_area1, BLUE);
+    if (mice_in_rect(*vars.drag_area1) || (*vars.is_dragging == IS_DRAGGING_1ND)) {
+        b_DrawRectangle(*vars.drag_area1, BLUE);
         if (mice_pressed_consume(MouseLeft)) {
-            *is_dragging = IS_DRAGGING_1ND;
+            *vars.is_dragging = IS_DRAGGING_1ND;
         }
     }
 
-    else if (mice_in_rect(*drag_area2) || (*is_dragging == IS_DRAGGING_2ND)) {
-        b_DrawRectangle(*drag_area2, RED);
+    else if (mice_in_rect(*vars.drag_area2) || (*vars.is_dragging == IS_DRAGGING_2ND)) {
+        b_DrawRectangle(*vars.drag_area2, RED);
         if (mice_pressed_consume(MouseLeft)) {
-            *is_dragging = IS_DRAGGING_2ND;
+            *vars.is_dragging = IS_DRAGGING_2ND;
         }
     }
 
-    if (*is_dragging == IS_DRAGGING_1ND) {
+    if (*vars.is_dragging == IS_DRAGGING_1ND) {
         int mouse_x = GetMousePositioni().x;
-        float factor = ((float)mouse_x - (float)area.x) / (float)area.width;
-        *percentage1 = (int)(factor * 100.0f);
-        *percentage1 = int_clamp(PAD, *percentage2 - PAD, *percentage1);
+        *vars.percentage1 = ((float)mouse_x - (float)area.x) / (float)area.width;
+        *vars.percentage1 = float_clamp(PAD, *vars.percentage2 - PAD, *vars.percentage1);
     }
-    if (*is_dragging == IS_DRAGGING_2ND) {
+    if (*vars.is_dragging == IS_DRAGGING_2ND) {
         int mouse_x = GetMousePositioni().x;
-        float factor = ((float)mouse_x - (float)area.x) / (float)area.width;
-        *percentage2 = (int)(factor * 100.0f);
-        *percentage2 = int_clamp(*percentage1 + PAD, 100 - PAD, *percentage2);
+        *vars.percentage2 = ((float)mouse_x - (float)area.x) / (float)area.width;
+        *vars.percentage2 = float_clamp(*vars.percentage1 + PAD, 1.f - PAD, *vars.percentage2);
     }
-    //printfd("FACTOR percentage1 %d percentage2 %d", *percentage1, *percentage2);
-
-    if (*is_dragging != NOT_DRAGGING && mice_released(MouseLeft)) {
-        *is_dragging = NOT_DRAGGING;
+    if (*vars.is_dragging != NOT_DRAGGING && mice_released(MouseLeft)) {
+        *vars.is_dragging = NOT_DRAGGING;
     }
 
-    b_ui_draw_text(ctx, cstr(TextFormat("%d:%d", *percentage1, *percentage2)), v2i_add(area.pos, v2ii(3)), GREEN);
+    b_ui_draw_text(ctx, cstr(TextFormat("%d:%d", *vars.percentage1, *vars.percentage2)), v2i_add(area.pos, v2ii(3)), GREEN);
 }
 
 void ui_widget_scroll(Widget *widget) {

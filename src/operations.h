@@ -555,7 +555,6 @@ void editor_process_cursor_logic(Ctx *ctx) {
             || ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
         )
     ) {
-        printfd("START SELECTION TRUE");
         ctx->editor.mouse_is_selecting = true;
         ctx->editor.selection_origin = ctx->editor.mouse_pos;
     }
