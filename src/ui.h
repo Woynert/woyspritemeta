@@ -17,6 +17,8 @@
 #define DEFAULT_BG LIGHTGRAY
 #define DEFAULT_FG BLACK
 #define ANIMATION_TICKS_PER_FRAME 15
+#define CHECKBOARD_BG (Color){ 200, 200, 200, 255 }
+#define CHECKBOARD_FG (Color){ 0, 0, 0, 20 }
 
 
 #define WIDGET__TABLE \
@@ -48,6 +50,12 @@ void ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
 void b_ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
     b_DrawTextEx(ctx->draw.font, str, pos, ctx->draw.font_size,
         ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
+}
+
+void b_ui_draw_text_pad(Ctx *ctx, strview_t str, V2i pos, Color tint) {
+    const int PAD = 2;
+    b_DrawTextEx(ctx->draw.font, str, (V2i){{pos.x + PAD, pos.y}},
+        ctx->draw.font_size, ctx->draw.char_spacing, ctx->draw.line_spacing, tint);
 }
 
 void ui_draw_text_highlighted(Ctx *ctx, strview_t str, V2i pos, Color tint, Color highlight) {
@@ -83,7 +91,8 @@ void ui_draw_text_outlined(Ctx *ctx, strview_t str, V2i pos, Color tint, int thi
     EndBlendMode();
 }
 
-bool ui__simple_button(const int id, Rect2i rect) {
+#define ui_simple_button(rect) ui__simple_button(rect,__COUNTER__)
+bool ui__simple_button(Rect2i rect, const int id) {
     static int pressed_was_on_btn_with_id = -1;
     bool pressed = false;
     bool hover_highlight = false;
@@ -104,12 +113,10 @@ bool ui__simple_button(const int id, Rect2i rect) {
         }
     }
     Color bg = held_highlight ? DARKBLUE : hover_highlight ? BLUE : LIGHTGRAY;
-    DrawRectangleReci(rect, bg);
-    DrawRectangleLinesi(rect, BLACK, 1);
+    b_DrawRectangle(rect, bg);
+    b_DrawRectangleLines(rect, BLACK, 1);
     return pressed;
 }
-
-#define ui_simple_button(rect) ui__simple_button(__COUNTER__,rect)
 
 
 /*
@@ -509,7 +516,7 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
             } else {
                 view = cstr(TextFormat("\"%"PRIstr"\"", PRIstrargbuf(sprite->name)));
             }
-            b_ui_draw_text(ctx, view, label_box.pos, DEFAULT_FG);
+            b_ui_draw_text_pad(ctx, view, label_box.pos, DEFAULT_FG);
         }
 
         // Edit name button.
@@ -526,7 +533,7 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
             }
         }
 
-        b_ui_draw_text(ctx, cstr_SL("Edit"), btn_edit_box.pos, DEFAULT_FG);
+        b_ui_draw_text_pad(ctx, cstr_SL("Edit"), btn_edit_box.pos, DEFAULT_FG);
     }
 
     // Draw frame controls.
@@ -542,7 +549,7 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
         Rect2i frame_plus_box  = chunks[2];
 
         b_DrawRectangle(line_box, DEFAULT_BG);
-        b_ui_draw_text(ctx, cstr(TextFormat("Frames %d", sprite->frames)), label_box.pos, DEFAULT_FG);
+        b_ui_draw_text_pad(ctx, cstr(TextFormat("Frames %d", sprite->frames)), label_box.pos, DEFAULT_FG);
         b_DrawRectangleLines(label_box, BLACK, 1);
 
         if (ui_simple_button(frame_minus_box)) {
@@ -550,14 +557,14 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
                 --sprite->frames;
             }
         }
-        b_ui_draw_text(ctx, cstr_SL("-"), frame_minus_box.pos, DEFAULT_FG);
+        b_ui_draw_text_pad(ctx, cstr_SL("-"), frame_minus_box.pos, DEFAULT_FG);
 
         if (ui_simple_button(frame_plus_box)) {
             if (sprite->frames < ctx->spritesheet_list.size) {
                 ++sprite->frames;
             }
         }
-        b_ui_draw_text(ctx, cstr_SL("+"), frame_plus_box.pos, DEFAULT_FG);
+        b_ui_draw_text_pad(ctx, cstr_SL("+"), frame_plus_box.pos, DEFAULT_FG);
     }
 
     area.height -= ctx->draw.line_height * 2;
@@ -565,11 +572,11 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
 
     // Draw sprite.
     {
-        BeginTextureMode(ctx->draw.aux_viewport);
-        DrawRectangleReci(area, DARKGRAY);
-        ui_draw_sprite(ctx, sprite, area);
-        EndTextureMode();
-        b_DrawTextureRec_flipped(ctx->draw.aux_viewport.texture, area, area.pos, WHITE);
+        b_DrawRectangle(area, DARKGRAY);
+        Rect2i sprite_area = b_ui_draw_sprite(ctx, sprite, area);
+        b_DrawRectangle(sprite_area, CHECKBOARD_BG);
+        b_DrawCheckerboard(sprite_area, CHECKBOARD_FG, (sprite_area.width / sprite->size.x) * 8);
+        b_ui_draw_sprite(ctx, sprite, area);
     }
 }
 
@@ -666,8 +673,8 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 
     b_BeginScissorMode(area);
     b_DrawRectangle(area, DARKGRAY);
-    b_DrawRectangle(final, DEFAULT_BG);
-    b_DrawCheckerboard(final, (Color){ 0, 0, 0, 10 }, (int)(((float)16 * ctx->zoompanel.zoom)));
+    b_DrawRectangle(final, CHECKBOARD_BG);
+    b_DrawCheckerboard(final, CHECKBOARD_FG, (int)(((float)16 * ctx->zoompanel.zoom)));
     b_DrawTextureScaled(texture, final);
 
     {
@@ -814,7 +821,7 @@ void ui_draw_all(Ctx *ctx) {
     {
         uitree_Node con_3split = uitree_container(t, cstr_SL("MainHSplit"),
                 widget_3hsplit, UI_WIDGET_3HSPLIT_DRAG);
-        widget_3hsplit_set_user_default_state(t, &con_3split, 10, 90);
+        widget_3hsplit_set_user_default_state(t, &con_3split, 20, 80);
 
         {
             {

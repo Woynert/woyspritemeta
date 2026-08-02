@@ -59,12 +59,6 @@ typedef struct Draw {
     int char_spacing;
     int line_spacing;
     Font font;
-
-    /* For when needing to draw to a "canvas" that's gonna be shown partially.*/
-    RenderTexture2D aux_viewport;
-    RenderTexture2D aux_viewport2;
-    RenderTexture2D viewport_texture; /* Reserved ONLY for the viewport widget. */
-
 } Draw;
 
 typedef enum SHEETEDITOR_CURSOR {
@@ -137,9 +131,6 @@ void _free_ctx(Ctx *ctx) {
     // Free draw stuf.
     {
         UnloadFont(ctx->draw.font);
-        UnloadTexture(ctx->draw.aux_viewport.texture);
-        UnloadTexture(ctx->draw.aux_viewport2.texture);
-        UnloadTexture(ctx->draw.viewport_texture.texture);
     }
 
     strbuf_destroy(&ctx->curr_project_file_path);

@@ -67,11 +67,6 @@ void ctx_load_assets(Ctx *ctx) {
     ctx->draw.line_height = ctx->draw.font_size +ctx->draw.line_spacing +2;
     ctx->draw.font = load_font_with_buncha_codepoints(
             "assets/Roboto-Regular.ttf", ctx->draw.font_size);
-
-    ctx->draw.aux_viewport = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
-    ctx->draw.aux_viewport2 = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
-    ctx->draw.viewport_texture = LoadRenderTexture(GetMonitorWidth(0), GetMonitorHeight(0));
-
 }
 
 
