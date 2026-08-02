@@ -87,6 +87,7 @@ void winput_glfw_mouse_button_callback(GLFWwindow* w, int button, int action, in
 }
 
 
+// @Note. Call at frame start.
 void winput_sync_frame(WinputFrame *frame) {
     frame->wheel_x = winput__state.wheel_x;
     frame->wheel_y = winput__state.wheel_y;
@@ -116,7 +117,7 @@ void winput_glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoff
 
 
 
-/* Call at frame end. */
+/* @Note. Call at frame end. */
 void winput_consume_all(void) {
     for (int i = MouseLeft; i <= MouseMiddle; ++i) {
         winput__state.button[i].pressed = false;
@@ -131,13 +132,16 @@ void winput_consume_all(void) {
     winput__state.wheel_y = 0;
 }
 
+
 void winput_consume(WinputFrame *frame, WinputMice button, bool trigger_release) {
     if (frame == NULL) { frame = &winput__state; }
     assert(button <= MouseMiddle);
     frame->button[button].pressed             = false;
-    frame->button[button].held                = false;
-    frame->button[button].ignore_next_release = true;
-    frame->button[button].released            = trigger_release;
+    //frame->button[button].held                = false;
+    //frame->button[button].ignore_next_release = !trigger_release;
+    //frame->button[button].released            = trigger_release;
+    //frame->button[button].ignore_next_release = true;
+    //frame->button[button].released            = trigger_release;
 }
 
 bool winput_frame_mice_pressed(WinputFrame *frame, WinputMice button) {
@@ -153,6 +157,10 @@ bool winput_frame_mice_held(WinputFrame *frame, WinputMice button) {
 bool winput_frame_mice_released(WinputFrame *frame, WinputMice button) {
     assert(button <= MouseMiddle);
     return frame->button[button].released;
+}
+
+float winput_frame_wheel(WinputFrame *frame) {
+    return frame->wheel_y;
 }
 
 bool winput_mice_pressed(WinputMice button) {

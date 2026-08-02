@@ -1,3 +1,8 @@
+/*
+   Room for improvement:
+   * Make node children be a linked list and not a vector.
+*/
+
 #ifndef UITREE_H
 #define UITREE_H
 
@@ -221,7 +226,7 @@ void uitree_build_end(Uitree *t) {
     ++t->frame;
     uitree__cleanup_saved_state(t);
 
-    if ((1)) {
+    if ((0)) {
         printfd("PRINTING TREE:");
         uitree__print_tree(t, &t->root_node, 0);
     }

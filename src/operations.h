@@ -8,6 +8,7 @@
 #include "strnum.h"
 #include "cwalk.h"
 #include "raylib.h"
+#include "ui_mouse_input.h"
 
 
 int init_ctx(Ctx *ctx);
@@ -436,8 +437,8 @@ void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
 
 
 void editor_process_cursor_mode_logic(Ctx *ctx) {
-    bool mouse_pressed = winput_mice_pressed(MouseLeft);
-    bool mouse_released = winput_mice_released(MouseLeft);
+    bool mouse_pressed = mice_pressed(MouseLeft);
+    bool mouse_released = mice_released(MouseLeft);
     bool mouse_inside = ctx->editor.mouse_inside;
     bool pressed_inside = ctx->editor.mouse_inside && mouse_pressed;
     bool released_inside = ctx->editor.mouse_inside && mouse_released;
@@ -496,7 +497,7 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     {
 
         // Cancel.
-        if (winput_mice_pressed(MouseRight) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
+        if (mice_pressed(MouseRight) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
             editor_cancel_drag(ctx);
             spritesheet_reset_cursor_mode(ctx);
             return;
@@ -526,7 +527,7 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     case SHEETEDITOR_CURSOR_RESIZE:
     {
         // Cancel.
-        if (winput_mice_pressed(MouseRight) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
+        if (mice_pressed(MouseRight) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
             spritesheet_reset_cursor_mode(ctx);
             return;
         }
@@ -548,7 +549,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
 
     // Start selection.
     if (!ctx->editor.mouse_is_selecting && ctx->editor.mouse_inside
-        && winput_mice_pressed(MouseLeft)
+        && mice_pressed(MouseLeft)
         && (
             ctx->editor.cursor == SHEETEDITOR_CURSOR_TWEAK
             || ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
@@ -582,7 +583,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
 
     // End selection.
     if (ctx->editor.mouse_is_selecting
-        && winput_mice_released(MouseLeft)
+        && mice_released(MouseLeft)
     ) {
         ctx->editor.mouse_is_selecting = false;
     }

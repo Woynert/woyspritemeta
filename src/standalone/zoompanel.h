@@ -3,6 +3,7 @@
 
 #include "portable_utils.h"
 #include "raylib_extra.h"
+#include "ui_mouse_input.h"
 #include "winput.h"
 
 
@@ -77,8 +78,8 @@ void zoompanel__zooming(Zoompanel *panel, Rect2i draw_area) {
     V2i mouse = GetMousePositioni();
 
     if (!CheckCollisionPointReci(mouse, draw_area)) { return; }
-    if (winput_wheel() == 0) { return; }
-    if (winput_wheel() > 0) {
+    if (mice_wheel() == 0) { return; }
+    if (mice_wheel() > 0) {
         ++panel->zoom_level;
     } else {
         --panel->zoom_level;

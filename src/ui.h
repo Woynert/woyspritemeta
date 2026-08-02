@@ -8,7 +8,6 @@
 #include "la_extra.h"
 #include "raylib.h"
 #include "la.h"
-#include "winput.h"
 #include "rlgl.h"
 #include "portable_utils.h"
 #include "./standalone/uitree.h"
@@ -88,17 +87,17 @@ bool ui__simple_button(const int id, Rect2i rect) {
     bool pressed = false;
     bool hover_highlight = false;
     bool held_highlight = false;
-    if (CheckCollisionPointReci(GetMousePositioni(), rect)) {
+    if (mice_in_rect(rect)) {
         hover_highlight = true;
-        if (winput_mice_pressed(MouseLeft)) {
+        if (mice_pressed_consume(MouseLeft)) {
             pressed_was_on_btn_with_id = id;
             held_highlight = true;
         }
         if (pressed_was_on_btn_with_id == id) {
-            if (winput_mice_held(MouseLeft)) {
+            if (mice_held(MouseLeft)) {
                 held_highlight = true;
             }
-            if (winput_mice_released(MouseLeft)) {
+            if (mice_released(MouseLeft)) {
                 pressed = true;
             }
         }
@@ -274,9 +273,10 @@ void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
     int *size = &info.state->int_a;
     const int *is_percentage_or_px = &info.state->int_c;
 
-    if (CheckCollisionPointReci(GetMousePositioni(), drag_area) || *is_dragging) {
+    if (mice_in_rect(drag_area) || *is_dragging) {
         b_DrawRectangle(drag_area, ORANGE);
-        if (winput_mice_pressed(MouseLeft)) {
+        if (mice_pressed(MouseLeft)) {
+            mice_consume(MouseLeft);
             *is_dragging = true;
         }
     }
@@ -287,7 +287,6 @@ void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
 
         if (*is_percentage_or_px == 0) {
             float factor = ((float)mouse_y - ((float)area.y + (float)area.height / 2.0f)) / (float)area.height;
-            printfd("FACTOR %f", factor);
             *size = (int)(factor * 100.0f);
             *size = int_clamp(-45, 45, *size);
         } else {
@@ -297,7 +296,7 @@ void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
         }
         // ↑↑↑ This ensures at least a % is visible at minimum.
 
-        if (winput_mice_released(MouseLeft)) {
+        if (mice_released(MouseLeft)) {
             *is_dragging = false;
         }
     }
@@ -383,16 +382,16 @@ void ui_widget_3hsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
 
     if (*percentage2 == 0) { *percentage2 = 50; }
 
-    if (CheckCollisionPointReci(GetMousePositioni(), *drag_area1) || (*is_dragging == IS_DRAGGING_1ND)) {
+    if (mice_in_rect(*drag_area1) || (*is_dragging == IS_DRAGGING_1ND)) {
         b_DrawRectangle(*drag_area1, BLUE);
-        if (winput_mice_pressed(MouseLeft)) {
+        if (mice_pressed_consume(MouseLeft)) {
             *is_dragging = IS_DRAGGING_1ND;
         }
     }
 
-    else if (CheckCollisionPointReci(GetMousePositioni(), *drag_area2) || (*is_dragging == IS_DRAGGING_2ND)) {
+    else if (mice_in_rect(*drag_area2) || (*is_dragging == IS_DRAGGING_2ND)) {
         b_DrawRectangle(*drag_area2, RED);
-        if (winput_mice_pressed(MouseLeft)) {
+        if (mice_pressed_consume(MouseLeft)) {
             *is_dragging = IS_DRAGGING_2ND;
         }
     }
@@ -400,21 +399,18 @@ void ui_widget_3hsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
     if (*is_dragging == IS_DRAGGING_1ND) {
         int mouse_x = GetMousePositioni().x;
         float factor = ((float)mouse_x - (float)area.x) / (float)area.width;
-        printfd("FACTOR %f", factor);
         *percentage1 = (int)(factor * 100.0f);
         *percentage1 = int_clamp(PAD, *percentage2 - PAD, *percentage1);
     }
     if (*is_dragging == IS_DRAGGING_2ND) {
         int mouse_x = GetMousePositioni().x;
-        //float factor = ((float)mouse_x - ((float)area.x + (float)area.width / 1.0f)) / (float)area.width;
         float factor = ((float)mouse_x - (float)area.x) / (float)area.width;
-        printfd("FACTOR %f", factor);
         *percentage2 = (int)(factor * 100.0f);
         *percentage2 = int_clamp(*percentage1 + PAD, 100 - PAD, *percentage2);
     }
-    printfd("FACTOR percentage1 %d percentage2 %d", *percentage1, *percentage2);
+    //printfd("FACTOR percentage1 %d percentage2 %d", *percentage1, *percentage2);
 
-    if (*is_dragging != NOT_DRAGGING && winput_mice_released(MouseLeft)) {
+    if (*is_dragging != NOT_DRAGGING && mice_released(MouseLeft)) {
         *is_dragging = NOT_DRAGGING;
     }
 
@@ -426,7 +422,7 @@ void ui_widget_scroll(Widget *widget) {
 
     if (widget->focused) {
         enum { SCROLL_PX = 60 };
-        int scroll = (int)winput_wheel();
+        int scroll = mice_wheel();
         printfd("Got scroll %d", scroll);
         if (scroll != 0) {
             widget->scroll_px -= scroll * SCROLL_PX;
@@ -487,15 +483,15 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
     const int line_height = ctx->draw.line_height;
     const Rect2i area = info.area;
     int *is_menu_open = &info.state->int_a;
-    bool mouse_in_options_btn = false;
 
     {
         Rect2i btn_area = { .x = area.x, .y = area.y, .width = area.width, .height = line_height };
-        mouse_in_options_btn = CheckCollisionPointReci(GetMousePositioni(), btn_area);
+        bool mouse_in_options_btn = mice_in_rect(btn_area);
         b_DrawRectangle(btn_area, DEFAULT_BG);
         if (mouse_in_options_btn) {
             b_DrawRectangle(btn_area, BLUE);
-            if (winput_mice_pressed(MouseLeft)) {
+            if (mice_pressed(MouseLeft)) {
+                mice_consume(MouseLeft);
                 *is_menu_open = !*is_menu_open;
             }
         }
@@ -503,13 +499,12 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
         b_ui_draw_text(ctx, cstr_SL("Options"), (V2i){{ area.pos.x + PAD, area.pos.y }}, DEFAULT_FG);
     }
 
-
     if (!*is_menu_open) { return; }
 
     // Drawing menu.
 
     Rect2i menu_area = { .x = area.x, .y = area.y + line_height, .height = line_height * ctx->actions.size, .width = 400, };
-    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), menu_area);
+    bool mouse_focus = mice_in_rect(menu_area);
     Rect2i line_area;
     b_BeginScissorMode(menu_area);
     b_DrawRectangle(menu_area, DEFAULT_BG);
@@ -522,10 +517,12 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
             .width = menu_area.width, .height = line_height
         }};
 
-        if (mouse_focus && CheckCollisionPointReci(GetMousePositioni(), line_area)) {
+        if (mouse_focus && mice_in_rect(line_area)) {
             b_DrawRectangle(line_area, BLUE);
 
-            if (winput_mice_pressed(MouseLeft)) {
+            if (mice_pressed(MouseLeft)) {
+                mice_consume(MouseLeft);
+                
                 call_action(ctx, action);
                 *is_menu_open = false;
             }
@@ -533,7 +530,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
 
         b_ui_draw_text(ctx, strbuf_view2(action->name), (V2i){{ line_area.pos.x+PAD, line_area.pos.y }}, DEFAULT_FG);
     }
-    if (!mouse_in_options_btn && winput_mice_pressed(MouseLeft)) { *is_menu_open = false; }
+    if (mice_pressed(MouseLeft)) { *is_menu_open = false; }
 
     b_DrawRectangleLines(menu_area, BLACK, 1);
     b_EndScissorMode();
@@ -562,10 +559,10 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
     area_scroll_viewport.height -= ctx->draw.line_height;
     b_BeginScissorMode(area_scroll_viewport);
 
-    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), area);
+    bool mouse_focus = mice_in_rect(area);
     {
         // Scrolling.
-        int scroll_wheel = mouse_focus ? int_sign((int)winput_wheel()) : 0;
+        int scroll_wheel = mouse_focus ? int_sign(mice_wheel()) : 0;
         ui__calculate_fancy_scroll_px(scroll_px, scroll_vel, area_scroll_viewport.height,
                 ctx->spritesheet_list.size * item_height, scroll_wheel);
         area_scroll.y += *scroll_px;
@@ -581,10 +578,10 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
         thumbnail_area = Rect2i_add_padding_all(thumbnail_area, thumbnail_pad);
         text_offset = (V2i) {{ thumbnail_area.x + thumbnail_area.width + text_pad, item_area.y + text_pad }};
 
-        if (mouse_focus && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
+        if (mouse_focus && mice_in_rect(item_area)) {
             b_DrawRectangle(item_area, BLUE);
 
-            if (winput_mice_held(MouseLeft)) {
+            if (mice_held(MouseLeft)) {
                 uint8_t layer_bk = drawbuf_get_layer();
                 drawbuf_set_layer(200);
                 Rect2i preview_area = { .pos = GetMousePositioni(), .size = {{ sheet->texture.width, sheet->texture.height }} };
@@ -641,12 +638,12 @@ void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
     area_scroll_viewport.height -= ctx->draw.line_height;
     b_BeginScissorMode(area_scroll_viewport);
 
-    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), area_s);
+    bool mouse_focus = mice_in_rect(area_s);
     if (mouse_focus) {
         ui__calculate_fancy_scroll_px(
                 scroll_px, scroll_vel_px,
                 area_scroll_viewport.height,
-                item_height * (ctx->sprites.size + 1), int_sign((int)winput_wheel()));
+                item_height * (ctx->sprites.size + 1), int_sign(mice_wheel()));
     };
     area_s.y += *scroll_px;
 
@@ -664,9 +661,10 @@ void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
 
         if (selected_sprite == i) { highlight = true; }
 
-        if (mouse_focus && CheckCollisionPointReci(GetMousePositioni(), item_area)) {
+        if (mouse_focus && mice_in_rect(item_area)) {
             highlight = true;
-            if (winput_mice_pressed(MouseLeft)) {
+            if (mice_pressed(MouseLeft)) {
+                mice_consume(MouseLeft);
                 // Select
                 spritesheet_clear_selection(ctx);
                 int_Dyna_append(&ctx->editor.selected_sprites, i);
@@ -804,8 +802,6 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
 void ui_widget_spritesheet_cursors(Ctx *ctx, uitree_DrawInfo info) {
 
     Rect2i area = info.area;
-    V2i mouse = GetMousePositioni();
-    bool mouse_focus = CheckCollisionPointReci(mouse, area);
 
     const int btn_width = 30;
     Rect2i btn_area = {{
@@ -819,7 +815,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, uitree_DrawInfo info) {
 
     // Tweak cursor. (DEFAULT)
     mode = SHEETEDITOR_CURSOR_TWEAK;
-    pressed = winput_mice_pressed(MouseLeft) && mouse_focus && CheckCollisionPointReci(mouse, btn_area);
+    pressed = mice_pressed_inside_and_consume(MouseLeft, btn_area);
     bg_color = pressed ? DARKBLUE : ctx->editor.cursor == mode ? BLUE : DEFAULT_BG;
     b_DrawRectangle(btn_area, BLACK);
     b_DrawRectangle(Rect2i_add_padding_all(btn_area, 1), bg_color);
@@ -831,7 +827,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, uitree_DrawInfo info) {
 
     // Add cursor.
     mode = SHEETEDITOR_CURSOR_ADD;
-    pressed = winput_mice_pressed(MouseLeft) && mouse_focus && CheckCollisionPointReci(mouse, btn_area);
+    pressed = mice_pressed_inside_and_consume(MouseLeft, btn_area);
     bg_color = pressed ? DARKBLUE : ctx->editor.cursor == mode ? BLUE : DEFAULT_BG;
     b_DrawRectangle(btn_area, BLACK);
     b_DrawRectangle(Rect2i_add_padding_all(btn_area, 1), bg_color);
@@ -843,7 +839,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, uitree_DrawInfo info) {
 
     // Reset zoom and pan button.
     bg_color = DEFAULT_BG;
-    pressed = winput_mice_pressed(MouseLeft) && mouse_focus && CheckCollisionPointReci(mouse, btn_area);
+    pressed = mice_pressed_inside_and_consume(MouseLeft, btn_area);
     bg_color = pressed ? DARKBLUE : DEFAULT_BG;
     b_DrawRectangle(btn_area, BLACK);
     b_DrawRectangle(Rect2i_add_padding_all(btn_area, 1), bg_color);
@@ -858,7 +854,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, uitree_DrawInfo info) {
 void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 
     Rect2i area = info.area;
-    bool mouse_focus = CheckCollisionPointReci(GetMousePositioni(), area);
+    bool mouse_focus = mice_in_rect(area);
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
     V2i mouse = GetMousePositioni();
 
@@ -928,7 +924,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
         || ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
         || ctx->editor.cursor == SHEETEDITOR_CURSOR_RESIZE
     ) {
-        ctx->editor.mouse_inside = mouse_focus && CheckCollisionPointReci(mouse, area);
+        ctx->editor.mouse_inside = mouse_focus && mice_in_rect(area);
 
         // Holding.
         if (ctx->editor.mouse_is_selecting) {
@@ -1098,7 +1094,7 @@ void ui_draw_all(Ctx *ctx) {
     }
     drawbuf_draw_all();
 
-    printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (t->arena.end - t->arena.beg)), PRIbytearg(1 << 20));
+    //printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (t->arena.end - t->arena.beg)), PRIbytearg(1 << 20));
 }
 
 #endif // !UI

@@ -13,6 +13,7 @@
 
 void glfw_mouse_callback(GLFWwindow* w, int button, int action, int mods) {
     winput_glfw_mouse_button_callback(w, button, action, mods);
+    uimouseinput_glfw_mouse_button_callback(w, button, action, mods);
 }
 
 void glfw_scroll_callback(GLFWwindow* w, double xoffset, double yoffset) {
@@ -61,6 +62,10 @@ int main(void) {
     {
         ++ctx.ticks;
         process_quit_key_combo();
+
+        {
+            winput_sync_frame(&ui_winput_frame); // TODO: Move me.
+        }
 
         BeginDrawing();
         ClearBackground(BLACK);

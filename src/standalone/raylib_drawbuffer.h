@@ -142,6 +142,7 @@ void b_DrawRectangleLines(Rect2i r, Color color, int thickness) {
 }
 
 void b_DrawTextEx(Font font, const strview_t string, V2i pos, int font_size, int spacing, int textLineSpacing, Color tint) {
+    if (string.size == 0 || string.data == NULL) { return; }
     drawbuf_Layer *layer = &DrawBuf.layers[DrawBuf__currlayer];
     // Allocate struct + size in one call.
     drawbuf_t_DrawTextEx *args = (drawbuf_t_DrawTextEx *)

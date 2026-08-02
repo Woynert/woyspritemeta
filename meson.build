@@ -29,6 +29,7 @@ my_extra_args = [
   # sanitizer
   #'-fsanitize=address',
   #'-lundef=false',
+
 ]
 
 add_project_arguments([
@@ -39,6 +40,8 @@ add_project_arguments([
 ], language:'c')
 add_project_link_arguments([
   '-fsanitize=address,undefined',
+
+  '-rdynamic', # Debug only, includes function names for printing the stack.
 ], language:'c')
 
 # strbuf
