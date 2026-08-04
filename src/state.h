@@ -17,11 +17,16 @@ typedef struct strbuf_wrap {
     strbuf_t *str;
 } strbuf_wrap;
 
-typedef struct Spritesheet {
+typedef struct SpritesheetFrame {
     strbuf_t *path;
     Image image;     /* CPU side. */
     Texture texture; /* GPU side. */
-} Spritesheet;
+} SpritesheetFrame;
+
+#define DYNA__TYPE SpritesheetFrame
+#define DYNA__NAMESPACE Vec_SpritesheetFrame
+#include "da.h"
+
 
 typedef struct Sprite {
     union {
@@ -42,15 +47,20 @@ typedef struct Sprite {
 #define DYNA__TYPE strbuf_wrap
 #include "da.h"
 
-#define DYNA__TYPE Spritesheet
-#define DYNA__NAMESPACE Vec_Spritesheet
-#include "da.h"
-
-#define DYNA__TYPE Vec_Spritesheet
-#define DYNA__NAMESPACE VecVec_Spritesheet
+#define DYNA__TYPE Sprite
 #include "da.h"
 
 #define DYNA__TYPE Sprite
+#define DYNA__NAMESPACE Vec_Sprite
+#include "da.h"
+
+typedef struct Spritesheet {
+    Vec_SpritesheetFrame frames;
+    Vec_Sprite sprites;
+} Spritesheet;
+
+#define DYNA__TYPE Spritesheet
+#define DYNA__NAMESPACE Vec_Spritesheet
 #include "da.h"
 
 #define DYNA__TYPE int
@@ -82,7 +92,7 @@ typedef struct Ctx {
     strbuf_t *curr_project_file_path;
 
     Action_Dyna actions;
-    VecVec_Spritesheet spritesheet_list; // A spritesheet vector with N items represents a spritesheet with N frames.
+    Vec_Spritesheet spritesheet_list; // A spritesheet vector with N items represents a spritesheet with N frames.
 
     int curr_spritesheet_id; // Spritesheet collection.
     int curr_spritesheet_frame_id;     // frame.
@@ -109,7 +119,7 @@ typedef struct Ctx {
         // [ @!Group ]
     } editor;
 
-    Sprite_Dyna sprites;
+    //Sprite_Dyna sprites;
     //int selected_sprite; // Instead use int_Dyna_get_safe(selected_sprites, 0);
 
     // [ Arenas ]

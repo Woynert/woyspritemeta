@@ -4,46 +4,83 @@
 #include "state.h"
 #include "arena_extra.h"
 
-void Spritesheet_free(Spritesheet *sheet) {
-    strbuf_destroy(&sheet->path);
-    if (IsImageValid(sheet->image)) { UnloadImage(sheet->image); }
-    if (IsTextureValid(sheet->texture)) { UnloadTexture(sheet->texture); }
-    *sheet = (Spritesheet) {0};
+void SpritesheetFrame_free(SpritesheetFrame *frame) {
+    strbuf_destroy(&frame->path);
+    if (IsImageValid(frame->image)) { UnloadImage(frame->image); }
+    if (IsTextureValid(frame->texture)) { UnloadTexture(frame->texture); }
+    *frame = (SpritesheetFrame) {0};
 }
 
-int Spritesheet_make(strview_t file_path, Spritesheet *out_sheet) {
-    Spritesheet sheet = { 0 };
-    sheet.path = strbuf_create(file_path, NULL);
-    sheet.image = LoadImage(sheet.path->cstr);
-    if (!IsImageValid(sheet.image)) {
+int SpritesheetFrame_make(strview_t file_path, SpritesheetFrame *out_frame) {
+    SpritesheetFrame frame = { 0 };
+    frame.path = strbuf_create(file_path, NULL);
+    frame.image = LoadImage(frame.path->cstr);
+    if (!IsImageValid(frame.image)) {
         printfd("WAR: Couldn't load image [%"PRIstr"].", PRIstrarg(file_path));
         goto abort;
     }
 
-    if (sheet.image.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
+    if (frame.image.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
         printfd("WAR: Image isn't R8G8B8A8, converting...");
-        ImageFormat(&sheet.image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+        ImageFormat(&frame.image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
     }
 
-    sheet.texture = LoadTextureFromImage(sheet.image);
-    if (!IsTextureValid(sheet.texture)) {
+    frame.texture = LoadTextureFromImage(frame.image);
+    if (!IsTextureValid(frame.texture)) {
         printfd("WAR: Couldn't load texture [%"PRIstr"].", PRIstrarg(file_path));
         goto abort;
     };
 
     if ((0)) {
     abort:
-        Spritesheet_free(&sheet);
+        SpritesheetFrame_free(&frame);
         return -1;
     }
-    *out_sheet = sheet;
+    *out_frame = frame;
     return 0;
+}
+
+
+Spritesheet Spritesheet_make(void) {
+    Spritesheet sheet = { 0 };
+    sheet.frames = Vec_SpritesheetFrame_create();
+    sheet.sprites = Vec_Sprite_create();
+    return sheet;
+}
+
+void Spritesheet_clear(Spritesheet *sheet) {
+    for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
+        SpritesheetFrame *s = iter.ref;
+        SpritesheetFrame_free(s);
+    }
+    Vec_SpritesheetFrame_clear_freeing(&sheet->frames);
+    for (dyna_foreach(Sprite, iter, sheet->sprites)) {
+        Sprite *s = iter.ref;
+        strbuf_destroy(&s->name);
+    }
+    Vec_Sprite_clear_freeing(&sheet->sprites);
+}
+
+void Spritesheet_free(Spritesheet *sheet) {
+    for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
+        SpritesheetFrame *s = iter.ref;
+        SpritesheetFrame_free(s);
+    }
+    Vec_SpritesheetFrame_free(&sheet->frames);
+
+    for (dyna_foreach(Sprite, iter, sheet->sprites)) {
+        Sprite *s = iter.ref;
+        strbuf_destroy(&s->name);
+    }
+    Vec_Sprite_free(&sheet->sprites);
+
+    *sheet = (Spritesheet) {0};
 }
 
 
 int _ctx_init(Ctx *ctx) {
     ctx->actions = Action_Dyna_create();
-    ctx->spritesheet_list = VecVec_Spritesheet_create();
+    ctx->spritesheet_list = Vec_Spritesheet_create();
     ctx->curr_project_file_path = strbuf_create_empty(0, NULL);
     ctx->editor.selected_sprites_cursor = int_Dyna_create();
     ctx->editor.selected_sprites = int_Dyna_create();
@@ -68,25 +105,21 @@ void _ctx_free(Ctx *ctx) {
 
     {
         // Free spritesheet list.
-        for (dyna_foreach(Vec_Spritesheet, kter, ctx->spritesheet_list)) {
-            Vec_Spritesheet *spritesheet_frames = kter.ref;
-            for (dyna_foreach(Spritesheet, iter, *spritesheet_frames)) {
-                Spritesheet *s = iter.ref;
-                Spritesheet_free(s);
-            }
-            Vec_Spritesheet_free(spritesheet_frames);
+        for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+            Spritesheet *sheet = kter.ref;
+            Spritesheet_free(sheet);
         }
-        VecVec_Spritesheet_free(&ctx->spritesheet_list);
+        Vec_Spritesheet_free(&ctx->spritesheet_list);
     }
 
-    {
-        // Free sprite list.
-        for (int i = 0; i < ctx->sprites.size; ++i) {
-            Sprite *sprite = &ctx->sprites.items[i];
-            strbuf_destroy(&sprite->name);
-        }
-        Sprite_Dyna_free(&ctx->sprites);
-    }
+    //{
+        //// Free sprite list.
+        //for (int i = 0; i < ctx->sprites.size; ++i) {
+            //Sprite *sprite = &ctx->sprites.items[i];
+            //strbuf_destroy(&sprite->name);
+        //}
+        //Sprite_Dyna_free(&ctx->sprites);
+    //}
 
     int_Dyna_free(&ctx->editor.selected_sprites_cursor);
     int_Dyna_free(&ctx->editor.selected_sprites);

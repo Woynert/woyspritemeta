@@ -148,36 +148,46 @@ int create_new_project(Ctx *ctx) {
     //return return_err;
 //}
 
+/// @Returns NULL of not found.
+Spritesheet *get_current_spritesheet(Ctx *ctx) {
+    return Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_spritesheet_id);
+}
 
-void select_spritesheet(Ctx *ctx, int id, int frame) {
-    Vec_Spritesheet *sheets = VecVec_Spritesheet_get_safe(&ctx->spritesheet_list, id);
-    if (sheets == NULL) { return; }
-    Spritesheet *sheet = Vec_Spritesheet_get_safe(sheets, frame);
+//void get_spritesheet_frame(Ctx *ctx, int sheet_id, int frame_id) {
+    //Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
+    //if (sheet == NULL) { return; }
+    //SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, frame_id);
+    //if (frame == NULL) { return; }
+
+void select_spritesheet_frame(Ctx *ctx, int sheet_id, int frame_id) {
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
     if (sheet == NULL) { return; }
-    ctx->curr_spritesheet_id = id;
-    ctx->curr_spritesheet_frame_id = frame;
+    SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, frame_id);
+    if (frame == NULL) { return; }
+    ctx->curr_spritesheet_id = sheet_id;
+    ctx->curr_spritesheet_frame_id = frame_id;
     ctx->curr_spritesheet_rect = (Rect2i) {
         .pos = v2ii(0),
-        .size = v2i(sheet->texture.width, sheet->texture.height),
+        .size = v2i(frame->texture.width, frame->texture.height),
     };
 }
 
-Spritesheet *get_selected_spritesheet(Ctx *ctx) {
-    Vec_Spritesheet *sheets = VecVec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_spritesheet_id);
-    if (sheets == NULL) { return NULL; }
-    return Vec_Spritesheet_get_safe(sheets, ctx->curr_spritesheet_frame_id);
+SpritesheetFrame *get_selected_spritesheet_frame(Ctx *ctx) {
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_spritesheet_id);
+    if (sheet == NULL) { return NULL; }
+    return Vec_SpritesheetFrame_get_safe(&sheet->frames, ctx->curr_spritesheet_frame_id);
 }
 
 
-/// @Returns NULL if Vec_Spritesheet doesn't exist.
-Vec_Spritesheet *Vec_Spritesheet_get_if_exists(Ctx *ctx, strview_t path, int *out_id) {
-    for (dyna_foreach(Vec_Spritesheet, kter, ctx->spritesheet_list)) {
-        Vec_Spritesheet *spritesheet_frames = kter.ref;
-        for (dyna_foreach(Spritesheet, iter, *spritesheet_frames)) {
-            Spritesheet *s = iter.ref;
-            if (wstrview_equals(path, strbuf_view2(s->path))) {
+/// @Returns NULL if Spritesheet doesn't exist.
+Spritesheet *spritesheet_get_if_exists(Ctx *ctx, strview_t path, int *out_id) {
+    for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+        Spritesheet *sheet = kter.ref;
+        for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
+            SpritesheetFrame *frame = iter.ref;
+            if (wstrview_equals(path, strbuf_view2(frame->path))) {
                 if (out_id != NULL) { *out_id = kter.index; }
-                return spritesheet_frames;
+                return sheet;
             }
         }
     }
@@ -195,27 +205,21 @@ int open_image_as_spritesheet(Ctx *ctx) {
     // If spritesheet already exists then free it and rebuild.
 
     int sheet_id;
-    Vec_Spritesheet *new_sheets = Vec_Spritesheet_get_if_exists(ctx, path, &sheet_id);
-    if (new_sheets != NULL) {
-        for (dyna_foreach(Spritesheet, iter, *new_sheets)) {
-            Spritesheet *s = iter.ref;
-            Spritesheet_free(s);
-        }
-        Vec_Spritesheet_clear_freeing(new_sheets);
-    }
+    Spritesheet *new_sheet = spritesheet_get_if_exists(ctx, path, &sheet_id);
+    if (new_sheet != NULL) { Spritesheet_clear(new_sheet); }
 
     // Load from path.
 
-    Spritesheet sheet = {0};
-    int err = Spritesheet_make(path, &sheet);
+    SpritesheetFrame frame = {0};
+    int err = SpritesheetFrame_make(path, &frame);
     if (err != 0) { return -1; }
-    if (new_sheets == NULL) {
-        Vec_Spritesheet _new_sheets = Vec_Spritesheet_create();
-        sheet_id = VecVec_Spritesheet_append(&ctx->spritesheet_list, _new_sheets);
-        new_sheets = VecVec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
-        if (new_sheets == NULL) { return -1; }
+    if (new_sheet == NULL) {
+        Spritesheet _new_sheet = Spritesheet_make();
+        sheet_id = Vec_Spritesheet_append(&ctx->spritesheet_list, _new_sheet);
+        new_sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
+        if (new_sheet == NULL) { return -1; }
     }
-    Vec_Spritesheet_append(new_sheets, sheet);
+    Vec_SpritesheetFrame_append(&new_sheet->frames, frame);
 
     // Get base and extension.
 
@@ -252,9 +256,9 @@ int open_image_as_spritesheet(Ctx *ctx) {
         for (;;) {
             ++digit;
             strbuf_printf(&possible_file_path, PRIstrw"%d"PRIstrw, PRIstrarg(base), digit, PRIstrarg(extension));
-            err = Spritesheet_make(strbuf_view2(possible_file_path), &sheet);
+            err = SpritesheetFrame_make(strbuf_view2(possible_file_path), &frame);
             if (err != 0) { break; }
-            Vec_Spritesheet_append(new_sheets, sheet);
+            Vec_SpritesheetFrame_append(&new_sheet->frames, frame);
         }
     }
 
@@ -262,7 +266,7 @@ int open_image_as_spritesheet(Ctx *ctx) {
 
     commit:
     {
-        select_spritesheet(ctx, sheet_id, 0); // TODO: Auto select this new one.
+        select_spritesheet_frame(ctx, sheet_id, 0); // TODO: Auto select this new one.
     }
     return 0;
 }
@@ -314,21 +318,26 @@ void register_sprite(Ctx *ctx, Rect2i rect) {
         return;
     }
 
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    if (sheet == NULL) { return; }
+
     printfd("SAVING SPRITE "V2i_Fmt, V2i_Arg(rect.size));
     Sprite sprite = {
         .rect = rect,
         .name = strbuf_create_empty(0, NULL),
         .frames = 1,
     };
-    Sprite_Dyna_append(&ctx->sprites, sprite);
+    Vec_Sprite_append(&sheet->sprites, sprite);
 }
 
 
 void remove_sprite(Ctx *ctx, int index) {
-    Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, index);
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    if (sheet == NULL) { return; }
+    Sprite *sprite = Vec_Sprite_get_safe(&sheet->sprites, index);
     if (sprite == NULL) { return; }
     strbuf_destroy(&sprite->name);
-    Sprite_Dyna_pop_at_preserve_order(&ctx->sprites, index, NULL);
+    Vec_Sprite_pop_at_preserve_order(&sheet->sprites, index, NULL);
 
     /*
        @Note: Every time the ctx->sprites list is modified
@@ -338,7 +347,9 @@ void remove_sprite(Ctx *ctx, int index) {
 
 
 bool sprite_name_already_exists(Ctx *ctx, strview_t name) {
-    for (dyna_foreach(Sprite, sprite, ctx->sprites)) {
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    if (sheet == NULL) { return false; }
+    for (dyna_foreach(Sprite, sprite, sheet->sprites)) {
         if (strview_equal(name, strbuf_view2(sprite.ref->name))) {
             return true;
         }
@@ -349,8 +360,9 @@ bool sprite_name_already_exists(Ctx *ctx, strview_t name) {
 
 void spritesheet_select_append(Ctx *ctx, Rect2i selection) {
     int_Dyna_clear_preserving(&ctx->editor.selected_sprites_cursor);
-
-    for (dyna_foreach(Sprite, i, ctx->sprites)) {
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    if (sheet == NULL) { return; }
+    for (dyna_foreach(Sprite, i, sheet->sprites)) {
         if (Rect2i_collides_Rect2i(selection, i.ref->rect)) {
             int_Dyna_append(&ctx->editor.selected_sprites_cursor, i.index);
         }
@@ -378,9 +390,10 @@ void spritesheet_commit_selection(Ctx *ctx) {
 
 void spritesheet_select_toggle(Ctx *ctx, V2i point) {
     int_Dyna_clear_preserving(&ctx->editor.selected_sprites_cursor);
-
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    if (sheet == NULL) { return; }
     // Simple click -> Toggle.
-    for (dyna_foreach(Sprite, i, ctx->sprites)) {
+    for (dyna_foreach(Sprite, i, sheet->sprites)) {
         if (Rect2i_collides_Rect2i((Rect2i){.pos=point, .size=v2ii(1)}, i.ref->rect)) {
             int out_i = -1;
             if (int_Dyna_find(&ctx->editor.selected_sprites, i.index, &out_i)) {
@@ -405,7 +418,9 @@ void spritesheet_reset_cursor_mode(Ctx *ctx) {
 Sprite *try_get_first_selected_sprite(Ctx *ctx) {
     int* sprite_id = int_Dyna_get_safe(&ctx->editor.selected_sprites, 0);
     if (sprite_id == NULL) { return NULL; }
-    return Sprite_Dyna_get_safe(&ctx->sprites, *sprite_id);
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    if (sheet == NULL) { return NULL; }
+    return Vec_Sprite_get_safe(&sheet->sprites, *sprite_id);
 }
 
 
@@ -520,8 +535,11 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
             // Delete last added sprite.
             if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyDown(KEY_Z) && ctx->editor.add_can_undo) {
                 ctx->editor.add_can_undo = false;
-                remove_sprite(ctx, ctx->sprites.size -1);
-                spritesheet_clear_selection(ctx);
+                Spritesheet *sheet = get_current_spritesheet(ctx);
+                if (sheet) {
+                    remove_sprite(ctx, sheet->sprites.size -1);
+                    spritesheet_clear_selection(ctx);
+                }
             }
         }
         if (!ctx->editor.mouse_is_selecting) { return; }
@@ -555,8 +573,10 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
         V2i delta = v2i_sub(ctx->editor.mouse_pos, ctx->editor.drag_prev_mouse_pos);
         ctx->editor.drag_prev_mouse_pos = ctx->editor.mouse_pos;
 
+        Spritesheet *sheet = get_current_spritesheet(ctx);
+        if (!sheet) { break; }
         for (dyna_foreach(int, sprite_id, ctx->editor.selected_sprites)) {
-            Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, *sprite_id.ref);
+            Sprite *sprite = Vec_Sprite_get_safe(&sheet->sprites, *sprite_id.ref);
             if (sprite == NULL) {
                 printfd("ERR: Sprite not found."); continue;
             }
@@ -631,13 +651,15 @@ void editor_process_cursor_logic(Ctx *ctx) {
 
 void editor_cancel_drag(Ctx *ctx) {
     if (ctx->editor.cursor != SHEETEDITOR_CURSOR_DRAG) { return; }
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    if (!sheet) { return; }
 
     // Reset original positions.
 
     V2i delta = v2i_sub(ctx->editor.drag_origin, ctx->editor.drag_prev_mouse_pos);
 
     for (dyna_foreach(int, sprite_id, ctx->editor.selected_sprites)) {
-        Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, *sprite_id.ref);
+        Sprite *sprite = Vec_Sprite_get_safe(&sheet->sprites, *sprite_id.ref);
         if (sprite == NULL) { printfd("ERR: Sprite not found."); continue; }
         sprite->offset = v2i_add(sprite->offset, delta);
     }

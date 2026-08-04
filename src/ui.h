@@ -123,15 +123,9 @@ bool ui__simple_button(Rect2i rect, const int id) {
    @Note: Draws sprite correctly scaled into container.
    @Returns final calculated transform.
 */
-Rect2i b_ui_draw_sprite(Ctx *ctx, Sprite *sprite, Rect2i area) {
-    int frame = (ctx->ticks % (sprite->frames * ANIMATION_TICKS_PER_FRAME)) / ANIMATION_TICKS_PER_FRAME;
-    Spritesheet *sheet = get_selected_spritesheet(ctx);
-    // TODO: Sprite need a spritesheet id.
-    //Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, frame);
-    if (sheet == NULL) {
-        return (Rect2i) { 0 };
-    }
-
+Rect2i b_ui_draw_sprite(Ctx *ctx, Spritesheet *sheet, Sprite *sprite, Rect2i area) {
+    int frame_id = (ctx->ticks % (sprite->frames * ANIMATION_TICKS_PER_FRAME)) / ANIMATION_TICKS_PER_FRAME;
+    SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, frame_id);
     Rect2i final = {{ 0 }};
 
     int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
@@ -147,7 +141,7 @@ Rect2i b_ui_draw_sprite(Ctx *ctx, Sprite *sprite, Rect2i area) {
     final.pos.x = area.x + ((area.width - final.width) / 2);
     final.pos.y = area.y + ((area.height - final.height) / 2);
 
-    b_DrawTextureScaled2(sheet->texture, final, sprite->rect);
+    b_DrawTextureScaled2(frame->texture, final, sprite->rect);
     return final;
 }
 
@@ -327,10 +321,10 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
     }
 
     int i = -1;
-    for (dyna_foreach(Vec_Spritesheet, kter, ctx->spritesheet_list)) {
-        Vec_Spritesheet *spritesheet_frames = kter.ref;
-    for (dyna_foreach(Spritesheet, iter, *spritesheet_frames)) {
-        Spritesheet *sheet = iter.ref;
+    for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+        Spritesheet *sheet = kter.ref;
+    for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
+        SpritesheetFrame *frame = iter.ref;
         ++i;
 
         item_area = (Rect2i) {{
@@ -347,20 +341,20 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
             if (mice_held(MouseLeft)) {
                 uint8_t layer_bk = drawbuf_get_layer();
                 drawbuf_set_layer(200);
-                Rect2i preview_area = { .pos = GetMousePositioni(), .size = {{ sheet->texture.width, sheet->texture.height }} };
+                Rect2i preview_area = { .pos = GetMousePositioni(), .size = {{ frame->texture.width, frame->texture.height }} };
                 preview_area = Rect2i_stay_within_Rect2i(preview_area, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()}});
                 b_DrawRectangle(Rect2i_add_padding_all(preview_area, -1), BLACK);
                 b_DrawRectangle(preview_area, DEFAULT_BG);
-                b_DrawTextureScaled(sheet->texture, preview_area);
+                b_DrawTextureScaled(frame->texture, preview_area);
                 drawbuf_set_layer(layer_bk);
             }
         }
 
-        b_ui_draw_text(ctx, strbuf_view2(sheet->path), text_offset, DEFAULT_FG);
+        b_ui_draw_text(ctx, strbuf_view2(frame->path), text_offset, DEFAULT_FG);
 
         b_DrawRectangle(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
         b_DrawRectangle(thumbnail_area, DEFAULT_BG);
-        b_DrawTextureScaled(sheet->texture, thumbnail_area);
+        b_DrawTextureScaled(frame->texture, thumbnail_area);
     }
     }
 
@@ -397,6 +391,10 @@ void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
     b_DrawRectangle(area, DEFAULT_BG);
     b_ui_draw_text(ctx, cstr_SL("Sprites:"), area.pos, DEFAULT_FG);
 
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    if (!sheet) { return; }
+    Vec_Sprite *sprites = &sheet->sprites;
+
     area_s.y += ctx->draw.line_height;
     area_scroll_viewport = area_s;
     area_scroll_viewport.height -= ctx->draw.line_height;
@@ -407,13 +405,13 @@ void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
         ui__calculate_fancy_scroll_px(
                 scroll_px, scroll_vel_px,
                 area_scroll_viewport.height,
-                item_height * (ctx->sprites.size + 1), int_sign(mice_wheel()));
+                item_height * (sprites->size + 1), int_sign(mice_wheel()));
     };
     area_s.y += *scroll_px;
 
-    for (int i = 0; i < ctx->sprites.size; ++i)
+    for (int i = 0; i < sprites->size; ++i)
     {
-        Sprite *sprite = &ctx->sprites.items[i];
+        Sprite *sprite = &sprites->items[i];
 
         item_area = (Rect2i) {{ area_s.x, area_s.y + i * item_height, area_s.width, item_height }};
         thumbnail_area = item_area;
@@ -451,7 +449,7 @@ void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
         // Draw texture.
 
         b_DrawRectangleLines(Rect2i_add_padding_all(thumbnail_area, -1), BLACK, 1);
-        b_ui_draw_sprite(ctx, sprite, thumbnail_area);
+        b_ui_draw_sprite(ctx, sheet, sprite, thumbnail_area);
     }
     b_EndScissorMode();
 
@@ -466,7 +464,9 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
     if (selected_sprite_ref == NULL) { return; }
     int selected_sprite = *selected_sprite_ref;
 
-    Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, selected_sprite);
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    if (!sheet) { return; }
+    Sprite *sprite = Vec_Sprite_get_safe(&sheet->sprites, selected_sprite);
     if (sprite == NULL) { return; }
 
     // Calculate current frame.
@@ -542,7 +542,7 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
         b_ui_draw_text_pad(ctx, cstr_SL("-"), frame_minus_box.pos, DEFAULT_FG);
 
         if (ui_simple_button(frame_plus_box)) {
-            if (sprite->frames < ctx->spritesheet_list.size) {
+            if (sprite->frames < sheet->frames.size) {
                 ++sprite->frames;
             }
         }
@@ -555,10 +555,10 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
     // Draw sprite.
     {
         b_DrawRectangle(area, DARKGRAY);
-        Rect2i sprite_area = b_ui_draw_sprite(ctx, sprite, area);
+        Rect2i sprite_area = b_ui_draw_sprite(ctx, sheet, sprite, area);
         b_DrawRectangle(sprite_area, CHECKBOARD_BG);
         b_DrawCheckerboard(sprite_area, CHECKBOARD_FG, (sprite_area.width / sprite->size.x) * 8);
-        b_ui_draw_sprite(ctx, sprite, area);
+        b_ui_draw_sprite(ctx, sheet, sprite, area);
     }
 }
 
@@ -622,8 +622,9 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
     V2i mouse = GetMousePositioni();
 
-    Spritesheet *sheet = get_selected_spritesheet(ctx);
-    if (sheet == NULL) {
+    Spritesheet *sheet = get_current_spritesheet(ctx);
+    SpritesheetFrame *frame = get_selected_spritesheet_frame(ctx);
+    if (!sheet || !frame) {
         b_DrawRectangle(area, DEFAULT_BG);
         b_ui_draw_text(ctx, cstr_SL("No spritesheet."), v2i_add(area.pos, v2ii(10)), DEFAULT_FG);
         return;
@@ -631,7 +632,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 
     // Spritesheet viewport ↓↓↓
 
-    const Texture texture = sheet->texture;
+    const Texture texture = frame->texture;
 
     V2i texture_size = v2i(texture.width, texture.height);
 
@@ -662,7 +663,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 
     {
         // Draw current sprites.
-        for (dyna_foreach(Sprite, i, ctx->sprites)) {
+        for (dyna_foreach(Sprite, i, sheet->sprites)) {
             Sprite *sprite = i.ref;
             Color color = Rect2i_is_out_of_bounds(sprite->rect, ctx->curr_spritesheet_rect) ? RED : YELLOW;
             ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, (int)scale, color, 2);
@@ -671,13 +672,13 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
         // Draw selected sprites.
         for (dyna_foreach(int, i, ctx->editor.selected_sprites)) {
             int sprite_id = *i.ref;
-            Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
+            Sprite *sprite = Vec_Sprite_get_safe(&sheet->sprites, sprite_id);
             if (sprite == NULL) { continue; }
             ui__spritesheet_draw_scaled_rect_lines(sprite->rect, panned_origin, (int)scale, BLUE, 1);
         }
         for (dyna_foreach(int, i, ctx->editor.selected_sprites_cursor)) {
             int sprite_id = *i.ref;
-            Sprite *sprite = Sprite_Dyna_get_safe(&ctx->sprites, sprite_id);
+            Sprite *sprite = Vec_Sprite_get_safe(&sheet->sprites, sprite_id);
             if (sprite == NULL) { continue; }
             ui__spritesheet_draw_scaled_rect_lines(sprite->rect, panned_origin, (int)scale, BLUE, 1);
         }
