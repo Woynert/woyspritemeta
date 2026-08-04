@@ -53,4 +53,31 @@ static void* arena_allocator(void* ptr, size_t size, int align, void* user_data)
     return result;
 }
 
+#define strbuf_create_with_arena(init, alloc) _Generic((init),\
+    size_t   : strbuf_create_with_arena_empty,\
+    int      : strbuf_create_with_arena_empty,\
+    strview_t: strbuf_create_with_arena_init\
+)(init, alloc)
+
+
+strbuf_t* strbuf_create_with_arena_empty(size_t initial_capacity, Arena *arena) {
+    if (arena == NULL) { return NULL; }
+    if (initial_capacity > INT_MAX) { return NULL; }
+    strbuf_allocator_t allocator = { .app_data = arena, .allocator = arena_strbuf_allocator };
+    strbuf_t *buf = (strbuf_t*)allocator.allocator(&allocator, NULL, sizeof(strbuf_t)+initial_capacity+1);
+    buf->capacity = (int)initial_capacity;
+    buf->allocator = allocator;
+    buf->size = 0;
+    buf->cstr[0] = 0;
+    return buf;
+}
+
+strbuf_t* strbuf_create_with_arena_init(strview_t initial_content, Arena *arena) {
+    if (arena == NULL) { return NULL; }
+    if (initial_content.size < 0) { return NULL; }
+    strbuf_t *buf = strbuf_create_with_arena_empty((size_t)initial_content.size, arena);
+    strbuf_assign(&buf, initial_content);
+    return buf;
+}
+
 #endif // !ARENA_EXTRA_H

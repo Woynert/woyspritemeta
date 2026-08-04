@@ -5,7 +5,6 @@
 #include "raylib.h"
 #include "zoompanel.h"
 #include "arena.h"
-#include "arena_extra.h"
 
 typedef struct Ctx Ctx;
 
@@ -44,6 +43,11 @@ typedef struct Sprite {
 #include "da.h"
 
 #define DYNA__TYPE Spritesheet
+#define DYNA__NAMESPACE Vec_Spritesheet
+#include "da.h"
+
+#define DYNA__TYPE Vec_Spritesheet
+#define DYNA__NAMESPACE VecVec_Spritesheet
 #include "da.h"
 
 #define DYNA__TYPE Sprite
@@ -78,8 +82,11 @@ typedef struct Ctx {
     strbuf_t *curr_project_file_path;
 
     Action_Dyna actions;
-    Spritesheet_Dyna spritesheet_list;
-    Rect2i spritesheet_image_rect;
+    VecVec_Spritesheet spritesheet_list; // A spritesheet vector with N items represents a spritesheet with N frames.
+
+    int curr_spritesheet_id; // Spritesheet collection.
+    int curr_spritesheet_frame_id;     // frame.
+    Rect2i curr_spritesheet_rect;
 
 
     // Sheeteditor widget.
@@ -114,55 +121,6 @@ typedef struct Ctx {
     // [ !Arenas ]
 } Ctx;
 
-int _init_ctx(Ctx *ctx) {
-    ctx->actions = Action_Dyna_create();
-    ctx->spritesheet_list = Spritesheet_Dyna_create();
-    ctx->curr_project_file_path = strbuf_create_empty(0, NULL);
-    ctx->editor.selected_sprites_cursor = int_Dyna_create();
-    ctx->editor.selected_sprites = int_Dyna_create();
-    ctx->frame_arena.root = ArenaRoot_create(1024 * 1024 * 10); // 10 MB.
-    ctx->frame_arena.arena = ArenaRoot_get_arena(ctx->frame_arena.root);
-    ctx->frame_arena.strbuf_alloc = make_arena_strbuf_allocator(&ctx->frame_arena.arena);
-    return 0;
-}
-
-void _free_ctx(Ctx *ctx) {
-
-    // Free draw stuf.
-    {
-        UnloadFont(ctx->draw.font);
-    }
-
-    strbuf_destroy(&ctx->curr_project_file_path);
-    for (int i = 0; i < ctx->actions.size; ++i) {
-        strbuf_destroy(&ctx->actions.items[i].name);
-    }
-    Action_Dyna_free(&ctx->actions);
-
-    {
-        // Free spritesheet list.
-        for (dyna_foreach(Spritesheet, i, ctx->spritesheet_list)) {
-            Spritesheet *s = i.ref;
-            strbuf_destroy(&s->path);
-            if (IsImageValid(s->image)) { UnloadImage(s->image); }
-            if (IsTextureValid(s->texture)) { UnloadTexture(s->texture); }
-        }
-        Spritesheet_Dyna_free(&ctx->spritesheet_list);
-    }
-
-    {
-        // Free sprite list.
-        for (int i = 0; i < ctx->sprites.size; ++i) {
-            Sprite *sprite = &ctx->sprites.items[i];
-            strbuf_destroy(&sprite->name);
-        }
-        Sprite_Dyna_free(&ctx->sprites);
-    }
-
-    int_Dyna_free(&ctx->editor.selected_sprites_cursor);
-    int_Dyna_free(&ctx->editor.selected_sprites);
-    ArenaRoot_free(&ctx->frame_arena.root);
-}
 
 typedef struct WidgetReq {
     bool   focus_area_request;

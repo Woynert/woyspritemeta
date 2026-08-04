@@ -123,35 +123,11 @@ bool ui__simple_button(Rect2i rect, const int id) {
    @Note: Draws sprite correctly scaled into container.
    @Returns final calculated transform.
 */
-Rect2i ui_draw_sprite(Ctx *ctx, Sprite *sprite, Rect2i area) {
-    int frame = (ctx->ticks % (sprite->frames * ANIMATION_TICKS_PER_FRAME)) / ANIMATION_TICKS_PER_FRAME;
-    Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, frame);
-    if (sheet == NULL) {
-        return (Rect2i) { 0 };
-    }
-
-    Rect2i final = {{ 0 }};
-
-    int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
-    int scale_y = find_multiple_max_fit(sprite->rect.size.y, area.size.y);
-    if (scale_x <= 0 || scale_y <= 0) {
-        // Fallback to fraction scaling.
-        final.size = Rect_fit_in_Rect_and_preserve_aspect_ratio(area.size, sprite->rect.size);
-    } else {
-        // Pixel perfect scale.
-        final.size = v2i_mul(sprite->rect.size, v2ii(int_min(scale_x, scale_y)));
-    }
-    // Center.
-    final.pos.x = area.x + ((area.width - final.width) / 2);
-    final.pos.y = area.y + ((area.height - final.height) / 2);
-
-    DrawTextureScaled2(sheet->texture, final, sprite->rect);
-    return final;
-}
-
 Rect2i b_ui_draw_sprite(Ctx *ctx, Sprite *sprite, Rect2i area) {
     int frame = (ctx->ticks % (sprite->frames * ANIMATION_TICKS_PER_FRAME)) / ANIMATION_TICKS_PER_FRAME;
-    Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, frame);
+    Spritesheet *sheet = get_selected_spritesheet(ctx);
+    // TODO: Sprite need a spritesheet id.
+    //Spritesheet *sheet = Spritesheet_Dyna_get_safe(&ctx->spritesheet_list, frame);
     if (sheet == NULL) {
         return (Rect2i) { 0 };
     }
@@ -350,11 +326,16 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
         area_scroll.y += *scroll_px;
     }
 
-    for (int i = 0; i < ctx->spritesheet_list.size; ++i)
-    {
-        Spritesheet *sheet = &ctx->spritesheet_list.items[i];
+    int i = -1;
+    for (dyna_foreach(Vec_Spritesheet, kter, ctx->spritesheet_list)) {
+        Vec_Spritesheet *spritesheet_frames = kter.ref;
+    for (dyna_foreach(Spritesheet, iter, *spritesheet_frames)) {
+        Spritesheet *sheet = iter.ref;
+        ++i;
 
-        item_area = (Rect2i) {{ area_scroll.x, area_scroll.y + i * item_height, area_scroll.width, item_height }};
+        item_area = (Rect2i) {{
+            area_scroll.x + (iter.index > 0 ? ctx->draw.font_size : 0),
+            area_scroll.y + i * item_height, area_scroll.width, item_height }};
         thumbnail_area = item_area;
         thumbnail_area.width = thumbnail_area.height;
         thumbnail_area = Rect2i_add_padding_all(thumbnail_area, thumbnail_pad);
@@ -380,6 +361,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
         b_DrawRectangle(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
         b_DrawRectangle(thumbnail_area, DEFAULT_BG);
         b_DrawTextureScaled(sheet->texture, thumbnail_area);
+    }
     }
 
     b_EndScissorMode();
@@ -640,15 +622,16 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
     strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
     V2i mouse = GetMousePositioni();
 
-    if (ctx->spritesheet_list.size <= 0) {
+    Spritesheet *sheet = get_selected_spritesheet(ctx);
+    if (sheet == NULL) {
         b_DrawRectangle(area, DEFAULT_BG);
-        b_ui_draw_text(ctx, cstr_SL("No spritesheet loaded."), v2i_add(area.pos, v2ii(10)), DEFAULT_FG);
+        b_ui_draw_text(ctx, cstr_SL("No spritesheet."), v2i_add(area.pos, v2ii(10)), DEFAULT_FG);
         return;
     }
 
     // Spritesheet viewport ↓↓↓
 
-    const Texture texture = ctx->spritesheet_list.items[0].texture;
+    const Texture texture = sheet->texture;
 
     V2i texture_size = v2i(texture.width, texture.height);
 
@@ -681,7 +664,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
         // Draw current sprites.
         for (dyna_foreach(Sprite, i, ctx->sprites)) {
             Sprite *sprite = i.ref;
-            Color color = Rect2i_is_out_of_bounds(sprite->rect, ctx->spritesheet_image_rect) ? RED : YELLOW;
+            Color color = Rect2i_is_out_of_bounds(sprite->rect, ctx->curr_spritesheet_rect) ? RED : YELLOW;
             ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, (int)scale, color, 2);
         }
 

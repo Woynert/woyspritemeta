@@ -2,10 +2,12 @@
 #define OPERATIONS_H
 
 #include "state.h"
+#include "state_init.h"
 #include "tinyfiledialogs.h"
 #include "portable_utils.h"
 #include "strbuf_extra.h"
 #include "strnum.h"
+#include "wstrview.h"
 #include "cwalk.h"
 #include "raylib.h"
 #include "ui_mouse_input.h"
@@ -22,17 +24,17 @@ int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
 
 void _setup_ctx(Ctx *ctx);
 void _add_spritesheet(Ctx *ctx, strview_t path, Image image, Texture texture);
-void _clear_spritesheet_list(Ctx *ctx);
-int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path);
+//void _clear_spritesheet_list(Ctx *ctx);
+//int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path);
 
 int init_ctx(Ctx *ctx) {
-    _init_ctx(ctx);
+    _ctx_init(ctx);
     _setup_ctx(ctx);
     return 0;
 }
 
 void free_ctx(Ctx *ctx) {
-    _free_ctx(ctx);
+    _ctx_free(ctx);
 }
 
 void _setup_ctx(Ctx *ctx) {
@@ -86,66 +88,100 @@ int create_new_project(Ctx *ctx) {
     return 0;
 }
 
-void _add_spritesheet(Ctx *ctx, strview_t path, Image image, Texture texture) {
-    Spritesheet s = {
-        .path = strbuf_create(path, NULL),
-        .image = image,
-        .texture = texture,
-    };
-    Spritesheet_Dyna_append(&ctx->spritesheet_list, s);
-}
+//void _add_spritesheet(Ctx *ctx, Vec_Spritesheets new_sheet) {
+    //VecVec_Spritesheet_append(&ctx->spritesheet_list, new_sheet);
+//}
 
-void _clear_spritesheet_list(Ctx *ctx) {
-    for (int i = 0; i < ctx->spritesheet_list.size; ++i) {
-        Spritesheet *s = &ctx->spritesheet_list.items[i];
-        strbuf_destroy(&s->path);
-        if (IsImageValid(s->image)) { UnloadImage(s->image); }
-        if (IsTextureValid(s->texture)) { UnloadTexture(s->texture); }
-    }
-    Spritesheet_Dyna_clear_freeing(&ctx->spritesheet_list);
-}
+//void _clear_spritesheet_list(Ctx *ctx) {
+    //[>
+    //for (int i = 0; i < ctx->spritesheet_list.size; ++i) {
+        //Spritesheet *s = &ctx->spritesheet_list.items[i];
+        //strbuf_destroy(&s->path);
+        //if (IsImageValid(s->image)) { UnloadImage(s->image); }
+        //if (IsTextureValid(s->texture)) { UnloadTexture(s->texture); }
+    //}
+    //Spritesheet_Dyna_clear_freeing(&ctx->spritesheet_list);
+    //*/
+//}
 
 
 /// @returns Error.
-int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path) {
-    int return_err = 0;
+//int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path) {
+    //int return_err = 0;
 
-    strbuf_t *aux_str = strbuf_create(file_path, NULL); // Raylib only accepts cstrings :'(
+    //strbuf_t *aux_str = strbuf_create(file_path, NULL); // Raylib only accepts cstrings :'(
 
-    Image image;
-    Texture texture;
+    //Image image;
+    //Texture texture;
 
-    image = LoadImage(aux_str->cstr);
-    if (!IsImageValid(image)) {
-        printfd("WAR: Couldn't load image [%"PRIstr"].", PRIstrarg(file_path));
-        return_err = -1;
-        goto exit_cleanup;
-    }
+    //image = LoadImage(aux_str->cstr);
+    //if (!IsImageValid(image)) {
+        //printfd("WAR: Couldn't load image [%"PRIstr"].", PRIstrarg(file_path));
+        //return_err = -1;
+        //goto exit_cleanup;
+    //}
 
-    if (image.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
-        printfd("WAR: Image isn't R8G8B8A8, converting...");
-        ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-    }
+    //if (image.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
+        //printfd("WAR: Image isn't R8G8B8A8, converting...");
+        //ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    //}
 
-    texture = LoadTextureFromImage(image);
-    if (!IsTextureValid(texture)) {
-        printfd("WAR: Couldn't load texture [%"PRIstr"].", PRIstrarg(file_path));
-        return_err = -1;
-        goto exit_cleanup;
+    //texture = LoadTextureFromImage(image);
+    //if (!IsTextureValid(texture)) {
+        //printfd("WAR: Couldn't load texture [%"PRIstr"].", PRIstrarg(file_path));
+        //return_err = -1;
+        //goto exit_cleanup;
+    //};
+
+    //printfd("Sucessfully loaded texture %"PRIstr".", PRIstrarg(file_path));
+
+    //_add_spritesheet(ctx, file_path, image, texture);
+
+    //exit_cleanup:
+    //if ((0)) {
+        //// TODO: Make free spritesheet function.
+        //UnloadImage(image);
+        //UnloadTexture(texture);
+    //}
+
+    //strbuf_destroy(&aux_str);
+    //return return_err;
+//}
+
+
+void select_spritesheet(Ctx *ctx, int id, int frame) {
+    Vec_Spritesheet *sheets = VecVec_Spritesheet_get_safe(&ctx->spritesheet_list, id);
+    if (sheets == NULL) { return; }
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(sheets, frame);
+    if (sheet == NULL) { return; }
+    ctx->curr_spritesheet_id = id;
+    ctx->curr_spritesheet_frame_id = frame;
+    ctx->curr_spritesheet_rect = (Rect2i) {
+        .pos = v2ii(0),
+        .size = v2i(sheet->texture.width, sheet->texture.height),
     };
+}
 
-    printfd("Sucessfully loaded texture %"PRIstr".", PRIstrarg(file_path));
+Spritesheet *get_selected_spritesheet(Ctx *ctx) {
+    Vec_Spritesheet *sheets = VecVec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_spritesheet_id);
+    if (sheets == NULL) { return NULL; }
+    return Vec_Spritesheet_get_safe(sheets, ctx->curr_spritesheet_frame_id);
+}
 
-    _add_spritesheet(ctx, file_path, image, texture);
 
-    exit_cleanup:
-    if ((0)) {
-        UnloadImage(image);
-        UnloadTexture(texture);
+/// @Returns NULL if Vec_Spritesheet doesn't exist.
+Vec_Spritesheet *Vec_Spritesheet_get_if_exists(Ctx *ctx, strview_t path, int *out_id) {
+    for (dyna_foreach(Vec_Spritesheet, kter, ctx->spritesheet_list)) {
+        Vec_Spritesheet *spritesheet_frames = kter.ref;
+        for (dyna_foreach(Spritesheet, iter, *spritesheet_frames)) {
+            Spritesheet *s = iter.ref;
+            if (wstrview_equals(path, strbuf_view2(s->path))) {
+                if (out_id != NULL) { *out_id = kter.index; }
+                return spritesheet_frames;
+            }
+        }
     }
-
-    strbuf_destroy(&aux_str);
-    return return_err;
+    return NULL;
 }
 
 
@@ -153,34 +189,43 @@ int open_image_as_spritesheet(Ctx *ctx) {
 
     const char *file_patterns[] = { "*.png" };
     const char *path_result_cstr = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
-    if (path_result_cstr == NULL) {
-        return -1;
-    }
+    if (path_result_cstr == NULL) { return -1; }
     strview_t path = cstr(path_result_cstr);
 
-    _clear_spritesheet_list(ctx);
+    // If spritesheet already exists then free it and rebuild.
 
-    int err = _try_load_image_as_spritesheet(ctx, path);
-    if (err != 0) {
-        return -1;
+    int sheet_id;
+    Vec_Spritesheet *new_sheets = Vec_Spritesheet_get_if_exists(ctx, path, &sheet_id);
+    if (new_sheets != NULL) {
+        for (dyna_foreach(Spritesheet, iter, *new_sheets)) {
+            Spritesheet *s = iter.ref;
+            Spritesheet_free(s);
+        }
+        Vec_Spritesheet_clear_freeing(new_sheets);
     }
 
-    // Save dimensions
+    // Load from path.
 
-    ctx->spritesheet_image_rect.pos = v2ii(0);
-    ctx->spritesheet_image_rect.width = ctx->spritesheet_list.items[0].texture.width;
-    ctx->spritesheet_image_rect.height = ctx->spritesheet_list.items[0].texture.height;
+    Spritesheet sheet = {0};
+    int err = Spritesheet_make(path, &sheet);
+    if (err != 0) { return -1; }
+    if (new_sheets == NULL) {
+        Vec_Spritesheet _new_sheets = Vec_Spritesheet_create();
+        sheet_id = VecVec_Spritesheet_append(&ctx->spritesheet_list, _new_sheets);
+        new_sheets = VecVec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
+        if (new_sheets == NULL) { return -1; }
+    }
+    Vec_Spritesheet_append(new_sheets, sheet);
+
+    // Get base and extension.
 
     strview_t base = path;
     strview_t extension = { 0 };
-
-    // Extract extension and remove it from base
 
     if (cwk_path_has_extension(base.data)) {
         size_t size;
         cwk_path_get_extension(base.data, &extension.data, &size);
         extension.size = (int)size;
-
         base.size -= extension.size;
     }
 
@@ -188,37 +233,37 @@ int open_image_as_spritesheet(Ctx *ctx) {
 
     strview_t digit_str = strnum_get_all_trailing_digits(base);
     int digit = strnum_int(digit_str, -1, STRNUM_DEFAULT);
-    if (digit == -1) {
-        return 0;
-    }
-
+    if (digit == -1) { goto commit; }
     base.size -= digit_str.size;
+
+    // Traverse frame files.
+    // Check for next frame --> "file_name[digit +1].png"
+    // @note: Currently we don't support zero padded digits like 001 002 003.
 
     if ((0)) {
         printfd("Basename [%"PRIstr"] Extension [%"PRIstr"]", PRIstrarg(base), PRIstrarg(extension));
         printfd("basename_digit_str [%"PRIstr"] basename_digit [%d]", PRIstrarg(digit_str), digit);
     }
 
-    // Traverse frame files.
-    // Check for next frame --> "file_name[digit +1].png"
-    // @note: Currently we don't support zero padded digits like 001 002 003.
-
     {
-        strbuf_t *possible_file_path = strbuf_create(0, NULL);
+        Arena arena = ctx->frame_arena.arena;
+        strbuf_t *possible_file_path = strbuf_create_with_arena(0, &arena);
 
         for (;;) {
             ++digit;
-
-            strbuf_printf(&possible_file_path, "%"PRIstr"%d%"PRIstr"",
-                    PRIstrarg(base), digit, PRIstrarg(extension));
-
-            err = _try_load_image_as_spritesheet(ctx, strbuf_view2(possible_file_path));
+            strbuf_printf(&possible_file_path, PRIstrw"%d"PRIstrw, PRIstrarg(base), digit, PRIstrarg(extension));
+            err = Spritesheet_make(strbuf_view2(possible_file_path), &sheet);
             if (err != 0) { break; }
+            Vec_Spritesheet_append(new_sheets, sheet);
         }
-
-        strbuf_destroy(&possible_file_path);
     }
 
+    // Finally commit.
+
+    commit:
+    {
+        select_spritesheet(ctx, sheet_id, 0); // TODO: Auto select this new one.
+    }
     return 0;
 }
 
@@ -265,7 +310,7 @@ Font load_font_with_buncha_codepoints(const char* font_path, int font_size) {
 
 
 void register_sprite(Ctx *ctx, Rect2i rect) {
-    if (Rect2i_is_out_of_bounds(rect, ctx->spritesheet_image_rect)) {
+    if (Rect2i_is_out_of_bounds(rect, ctx->curr_spritesheet_rect)) {
         return;
     }
 
