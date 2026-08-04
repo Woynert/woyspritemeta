@@ -348,6 +348,10 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
                 b_DrawTextureScaled(frame->texture, preview_area);
                 drawbuf_set_layer(layer_bk);
             }
+            if (mice_released(MouseLeft)) {
+                mice_consume(MouseLeft);
+                select_spritesheet_frame(ctx, kter.index, iter.index);
+            }
         }
 
         b_ui_draw_text(ctx, strbuf_view2(frame->path), text_offset, DEFAULT_FG);
@@ -665,7 +669,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
         // Draw current sprites.
         for (dyna_foreach(Sprite, i, sheet->sprites)) {
             Sprite *sprite = i.ref;
-            Color color = Rect2i_is_out_of_bounds(sprite->rect, ctx->curr_spritesheet_rect) ? RED : YELLOW;
+            Color color = Rect2i_is_out_of_bounds(sprite->rect, ctx->curr_sheet_size) ? RED : YELLOW;
             ui__spritesheet_draw_scaled_rect_lines2(sprite->rect, panned_origin, (int)scale, color, 2);
         }
 

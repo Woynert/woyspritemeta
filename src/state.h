@@ -94,9 +94,9 @@ typedef struct Ctx {
     Action_Dyna actions;
     Vec_Spritesheet spritesheet_list; // A spritesheet vector with N items represents a spritesheet with N frames.
 
-    int curr_spritesheet_id; // Spritesheet collection.
-    int curr_spritesheet_frame_id;     // frame.
-    Rect2i curr_spritesheet_rect;
+    int curr_sheet_id;    // Spritesheet collection.
+    int curr_frame_id;    // frame.
+    Rect2i curr_sheet_size;
 
 
     // Sheeteditor widget.

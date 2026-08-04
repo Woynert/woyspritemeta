@@ -148,10 +148,30 @@ int create_new_project(Ctx *ctx) {
     //return return_err;
 //}
 
+
+void spritesheet_clear_selection(Ctx *ctx) {
+    int_Dyna_clear_preserving(&ctx->editor.selected_sprites);
+    int_Dyna_clear_preserving(&ctx->editor.selected_sprites_cursor);
+}
+
+void editor_reset_selection(Ctx *ctx) {
+    spritesheet_clear_selection(ctx);
+    ctx->editor.mouse_is_selecting = false;
+    ctx->editor.add_can_undo = false;
+}
+
+
 /// @Returns NULL of not found.
 Spritesheet *get_current_spritesheet(Ctx *ctx) {
-    return Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_spritesheet_id);
+    return Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_sheet_id);
 }
+
+//void select_spritesheet(Ctx *ctx, int sheet_id) {
+    //Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
+    //if (!sheet) { return; }
+    //ctx->curr_spritesheet_id = sheet_id;
+    //ctx->curr_spritesheet_id = sheet_id;
+//}
 
 //void get_spritesheet_frame(Ctx *ctx, int sheet_id, int frame_id) {
     //Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
@@ -164,18 +184,21 @@ void select_spritesheet_frame(Ctx *ctx, int sheet_id, int frame_id) {
     if (sheet == NULL) { return; }
     SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, frame_id);
     if (frame == NULL) { return; }
-    ctx->curr_spritesheet_id = sheet_id;
-    ctx->curr_spritesheet_frame_id = frame_id;
-    ctx->curr_spritesheet_rect = (Rect2i) {
+    if (ctx->curr_sheet_id != sheet_id) {
+        editor_reset_selection(ctx);
+    }
+    ctx->curr_sheet_id = sheet_id;
+    ctx->curr_frame_id = frame_id;
+    ctx->curr_sheet_size = (Rect2i) {
         .pos = v2ii(0),
         .size = v2i(frame->texture.width, frame->texture.height),
     };
 }
 
 SpritesheetFrame *get_selected_spritesheet_frame(Ctx *ctx) {
-    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_spritesheet_id);
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_sheet_id);
     if (sheet == NULL) { return NULL; }
-    return Vec_SpritesheetFrame_get_safe(&sheet->frames, ctx->curr_spritesheet_frame_id);
+    return Vec_SpritesheetFrame_get_safe(&sheet->frames, ctx->curr_frame_id);
 }
 
 
@@ -314,7 +337,7 @@ Font load_font_with_buncha_codepoints(const char* font_path, int font_size) {
 
 
 void register_sprite(Ctx *ctx, Rect2i rect) {
-    if (Rect2i_is_out_of_bounds(rect, ctx->curr_spritesheet_rect)) {
+    if (Rect2i_is_out_of_bounds(rect, ctx->curr_sheet_size)) {
         return;
     }
 
@@ -367,10 +390,6 @@ void spritesheet_select_append(Ctx *ctx, Rect2i selection) {
             int_Dyna_append(&ctx->editor.selected_sprites_cursor, i.index);
         }
     }
-}
-
-void spritesheet_clear_selection(Ctx *ctx) {
-    int_Dyna_clear_preserving(&ctx->editor.selected_sprites);
 }
 
 int *get_selected_sprite(Ctx *ctx) {
