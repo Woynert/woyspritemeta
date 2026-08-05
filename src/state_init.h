@@ -48,17 +48,12 @@ Spritesheet Spritesheet_make(void) {
     return sheet;
 }
 
-void Spritesheet_clear(Spritesheet *sheet) {
+void Spritesheet_clear_frames(Spritesheet *sheet) {
     for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
         SpritesheetFrame *s = iter.ref;
         SpritesheetFrame_free(s);
     }
     Vec_SpritesheetFrame_clear_freeing(&sheet->frames);
-    for (dyna_foreach(Sprite, iter, sheet->sprites)) {
-        Sprite *s = iter.ref;
-        strbuf_destroy(&s->name);
-    }
-    Vec_Sprite_clear_freeing(&sheet->sprites);
 }
 
 void Spritesheet_free(Spritesheet *sheet) {

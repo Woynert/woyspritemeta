@@ -16,7 +16,6 @@
 int init_ctx(Ctx *ctx);
 void free_ctx(Ctx *ctx);
 int create_new_project(Ctx *ctx);
-int open_image_as_spritesheet(Ctx *ctx);
 void call_action(Ctx *ctx, Action *action);
 Font load_font_with_buncha_codepoints(const char* font_path, int font_size);
 void ctx_load_assets(Ctx *ctx);
@@ -137,18 +136,13 @@ Spritesheet *spritesheet_get_if_exists(Ctx *ctx, strview_t path, int *out_id) {
 }
 
 
-int open_image_as_spritesheet(Ctx *ctx) {
-
-    const char *file_patterns[] = { "*.png" };
-    const char *path_result_cstr = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
-    if (path_result_cstr == NULL) { return -1; }
-    strview_t path = cstr(path_result_cstr);
+int open_image_as_spritesheet(Ctx *ctx, strview_t path) {
 
     // If spritesheet already exists then free it and rebuild.
 
     int sheet_id;
     Spritesheet *new_sheet = spritesheet_get_if_exists(ctx, path, &sheet_id);
-    if (new_sheet != NULL) { Spritesheet_clear(new_sheet); }
+    if (new_sheet != NULL) { Spritesheet_clear_frames(new_sheet); }
 
     // Load from path.
 
@@ -211,6 +205,15 @@ int open_image_as_spritesheet(Ctx *ctx) {
         select_spritesheet_frame(ctx, sheet_id, 0); // TODO: Auto select this new one.
     }
     return 0;
+}
+
+
+int open_image_as_spritesheet_file_dialog(Ctx *ctx) {
+    const char *file_patterns[] = { "*.png" };
+    const char *path_result_cstr = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
+    if (path_result_cstr == NULL) { return -1; }
+    strview_t path = cstr(path_result_cstr);
+    return open_image_as_spritesheet(ctx, path);
 }
 
 void call_action(Ctx *ctx, Action *action) {
@@ -654,7 +657,14 @@ int action_spritesheet_delete(Ctx *ctx) {
 
 
 int action_spritesheet_reload(Ctx *ctx) {
-    return 0;
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->mouse_selected_spritesheet_id);
+    if (sheet == NULL) { return -1; }
+    SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, 0);
+    printfd("Why would it be not valid? "PRIstrw, PRIstrarg(strbuf_view2(frame->path)));
+    if (frame == NULL && !strview_is_valid(strbuf_view2(frame->path))) { return -1; }
+    strbuf_t *path = strbuf_create_with_arena(strbuf_view2(frame->path), &ctx->frame_arena.arena);
+    return open_image_as_spritesheet(ctx, strbuf_view2(path));
 }
+
 
 #endif // !OPERATIONS_H

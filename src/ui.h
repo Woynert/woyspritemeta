@@ -137,6 +137,7 @@ bool ui__simple_button(Rect2i rect, const int id) {
 Rect2i b_ui_draw_sprite(Ctx *ctx, Spritesheet *sheet, Sprite *sprite, Rect2i area) {
     int frame_id = (ctx->ticks % (sprite->frames * ANIMATION_TICKS_PER_FRAME)) / ANIMATION_TICKS_PER_FRAME;
     SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, frame_id);
+    if (!frame) { return (Rect2i) {0}; }
     Rect2i final = {{ 0 }};
 
     int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
@@ -281,7 +282,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
         {.name = cstr_SL_const("New Project"), .op_ptr = create_new_project},
         {.name = cstr_SL_const("Open Project"), .op_ptr = no_op},
         {.name = cstr_SL_const("Save Project"), .op_ptr = no_op},
-        {.name = cstr_SL_const("Load image as spritesheet"), .op_ptr = open_image_as_spritesheet},
+        {.name = cstr_SL_const("Load image as spritesheet"), .op_ptr = open_image_as_spritesheet_file_dialog},
     };
     const int line_height = ctx->draw.line_height;
     const Rect2i area = info.area;
