@@ -663,7 +663,17 @@ int action_spritesheet_reload(Ctx *ctx) {
     printfd("Why would it be not valid? "PRIstrw, PRIstrarg(strbuf_view2(frame->path)));
     if (frame == NULL && !strview_is_valid(strbuf_view2(frame->path))) { return -1; }
     strbuf_t *path = strbuf_create_with_arena(strbuf_view2(frame->path), &ctx->frame_arena.arena);
+    ctx->mouse_selected_spritesheet_id = -1;
     return open_image_as_spritesheet(ctx, strbuf_view2(path));
+}
+
+
+int action_spritesheet_toggle_fold(Ctx *ctx) {
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->mouse_selected_spritesheet_id);
+    if (sheet == NULL) { return -1; }
+    sheet->unfolded = !sheet->unfolded;
+    ctx->mouse_selected_spritesheet_id = -1;
+    return 0;
 }
 
 

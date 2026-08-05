@@ -310,9 +310,10 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
     const int text_pad = 3;
     const int thumbnail_pad = 3;
 
-    const ActionLiteral spritesheet_menu[] = {
-        { .name = cstr_SL("Delete spritesheet and frames."), .op_ptr = action_spritesheet_delete },
-        { .name = cstr_SL("Reload"), .op_ptr = action_spritesheet_reload },
+    static const ActionLiteral spritesheet_menu[] = {
+        { .name = cstr_SL_const("Reload"), .op_ptr = action_spritesheet_reload },
+        { .name = cstr_SL_const("Show/hide frames"), .op_ptr = action_spritesheet_toggle_fold },
+        { .name = cstr_SL_const("Delete spritesheet and frames."), .op_ptr = action_spritesheet_delete },
     };
 
     Rect2i item_area;
@@ -344,10 +345,12 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
         Spritesheet *sheet = kter.ref;
     for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
         SpritesheetFrame *frame = iter.ref;
+        bool is_first = iter.index == 0;
+        if (!is_first && !sheet->unfolded) { break; }
         ++i;
 
         item_area = (Rect2i) {{
-            area_scroll.x + (iter.index > 0 ? ctx->draw.font_size : 0),
+            area_scroll.x + (is_first ? 0 : ctx->draw.font_size),
             area_scroll.y + i * item_height, area_scroll.width, item_height }};
         thumbnail_area = item_area;
         thumbnail_area.width = thumbnail_area.height;
@@ -376,9 +379,19 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
                 mice_consume(MouseLeft);
                 select_spritesheet_frame(ctx, kter.index, iter.index);
             }
+            if (is_first && mice_double_click()) {
+                ctx->mouse_selected_spritesheet_id = kter.index;
+                action_spritesheet_toggle_fold(ctx);
+            }
         }
 
         b_ui_draw_text(ctx, strbuf_view2(frame->path), text_offset, DEFAULT_FG);
+        if (is_first && sheet->frames.size > 1) {
+            Arena arena = ctx->frame_arena.arena;
+            strbuf_t *frame_count_str = strbuf_create_with_arena(0, &arena);
+            strbuf_printf(&frame_count_str, "(%d frames)", sheet->frames.size);
+            b_ui_draw_text(ctx, strbuf_view2(frame_count_str), v2i(text_offset.x, text_offset.y + ctx->draw.line_height), DEFAULT_FG);
+        }
 
         b_DrawRectangle(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
         b_DrawRectangle(thumbnail_area, DEFAULT_BG);

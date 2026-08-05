@@ -84,6 +84,7 @@ int main(void) {
         quickmonitor_line("frame_arena %td/%td (%.3f%%)", used, total, ((float)used/(float)total)*100.0);
 
         winput_consume_all();
+        uimouseinput__frame_end();
         EndDrawing();
     }
 

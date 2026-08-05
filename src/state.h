@@ -66,6 +66,7 @@ typedef struct Sprite {
 typedef struct Spritesheet {
     Vec_SpritesheetFrame frames;
     Vec_Sprite sprites;
+    bool unfolded;
 } Spritesheet;
 
 #define DYNA__TYPE Spritesheet

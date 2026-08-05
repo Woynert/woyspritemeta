@@ -1,12 +1,22 @@
+/*
+   DESCRITION:
+   Very scuffed input system on top my other abstraction. Hopefully I eventually
+   merge it with the other so we can have only one.
+*/
+
 #ifndef UI_MOUSE_INPUT_H
 #define UI_MOUSE_INPUT_H
 
 #include "winput.h"
 #include "raylib_extra.h"
+#include "portable_utils.h"
 #include "execinfo.h"
 
+#define UI_MOUSE_INPUT__DOUBLE_CLICK_MS 500
 bool ui_mouse_available = true;
 WinputFrame ui_winput_frame = { 0 };
+long ui_mouse_input__last_left_click_timestamp = 0;
+bool ui_mouse_input__double_click;
 
 void print_call_stack(void) {
     void *buffer[20];
@@ -51,6 +61,14 @@ bool mice_pressed(WinputMice btn) {
     return winput_frame_mice_pressed(&ui_winput_frame, btn);
 }
 
+
+bool mice_double_click(void) {
+    bool v = ui_mouse_input__double_click;
+    ui_mouse_input__double_click = false;
+    if (v) { ui_mouse_input__last_left_click_timestamp = 0; }
+    return v;
+}
+
 bool mice_pressed_consume(WinputMice btn) {
     if (winput_frame_mice_pressed(&ui_winput_frame, btn)) {
         mice_consume(btn);
@@ -75,10 +93,23 @@ int mice_wheel(void) {
     return (int)winput_frame_wheel(&ui_winput_frame);
 }
 
+void uimouseinput__frame_end(void) {
+    if (ui_mouse_input__double_click) {
+        ui_mouse_input__last_left_click_timestamp = 0;
+    }
+    ui_mouse_input__double_click = false;
+}
+
 void uimouseinput_glfw_mouse_button_callback(GLFWwindow* w, int button, int action, int mods) {
     (void)w; (void)mods;
     if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT) {
         ui_mouse_available = true;
+    }
+    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
+        long curr_time = get_system_ms();
+        ui_mouse_input__double_click =
+            (curr_time - ui_mouse_input__last_left_click_timestamp < UI_MOUSE_INPUT__DOUBLE_CLICK_MS);
+        ui_mouse_input__last_left_click_timestamp = get_system_ms();
     }
 }
 
