@@ -34,12 +34,9 @@ typedef struct uitree_WidgetState {
 typedef struct uitree_Node uitree_Node;
 
 typedef struct uitree_DrawInfo {
-    int    user_draw_func_id;          // An id for the user to identify which function to call.
+    int    user_draw_func_id;    // An id for the user to identify which function to call.
     Rect2i area;
-    uitree_WidgetState *state;       // Persistent state, can be used to keep container's scroll value, etc.
-    bool     container_layout_request; // Only true, if this widget is marked as a Container.
-    int      child_count;
-    Rect2i **out_children;
+    uitree_WidgetState *state;   // Persistent state, can be used to keep container's scroll value, etc.
     int layer;
 } uitree_DrawInfo;
 
@@ -48,11 +45,11 @@ typedef struct uitree_DrawInfo {
 #include "list_simple.h"
 
 #define DYNA__TYPE uitree_List_DrawInfo
-#define DYNA__NAMESPACE uitree_Vec_List_DrawInfo
+#define DYNA__NAMESPACE uitree__Vec_List_DrawInfo
 #include "da.h"
 
 #define DYNA__TYPE uitree_Node
-#define DYNA__NAMESPACE uitree_Vec_Node
+#define DYNA__NAMESPACE uitree__Vec_Node
 #define DYNA__ONLY_HEADER
 #include "da.h"
 
@@ -70,7 +67,7 @@ typedef struct uitree_Node {
     bool is_container;
     struct {
         void *user_ctx; // User can set this to access it later on 'container_func' call.
-        uitree_Vec_Node children;
+        uitree__Vec_Node children;
     } container;
 
     Rect2i _area; // Used to hold the area momentarily during end_tree.
@@ -82,7 +79,7 @@ typedef struct uitree_Node {
 } uitree_Node;
 
 #define DYNA__TYPE uitree_Node
-#define DYNA__NAMESPACE uitree_Vec_Node
+#define DYNA__NAMESPACE uitree__Vec_Node
 #define DYNA__ONLY_IMP
 #include "da.h"
 
@@ -134,6 +131,9 @@ void uitree__print_tree(Uitree *t, uitree_Node *node, int level) {
     strview_t identifier = strpool_get(&t->strpool, node->identifier_strpool_id);
     if (identifier.size > 0) {
         printf(" id:%"PRIstr, PRIstrarg(identifier));
+    }
+    if (node->has_user_draw_func) {
+        printf(" area:"Rect2i_Fmt, Rect2i_Arg(node->_area));
     }
     printf("\n");
     if (!node->is_container) { return; }
@@ -213,14 +213,41 @@ void uitree__cleanup_saved_state(Uitree *t) {
 }
 
 
+void uitree__container_calculate_children_area(Uitree *t, Arena *scratch, uitree_Node *node) {
+    if (node->container_func == NULL) { printfd(ANSI_RED"ERROR: Container has no 'container_function'."); return; }
+    Rect2i *children_areas = arena_new(scratch, Rect2i, node->container.children.size);
+    strview_t identifier = strpool_get(&t->strpool, node->identifier_strpool_id);
+    uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier, node);
+    wassert(state);
+    node->container_func(node->_area, node->container.children.size, children_areas, node->container.user_ctx, state);
+    for (int i = 0; i < node->container.children.size; ++i) {
+        node->container.children.items[i]._area = children_areas[i];
+    }
+}
+
+
 typedef struct {
     uitree_Node *node;
     int child_idx;
     int depth;
 } StackItem;
-#define DYNA__TYPE StackItem
-#define DYNA__NAMESPACE uitree_Vec_Stack
-#include "da.h"
+
+#define LIST__TYPE StackItem
+#define LIST__NAMESPACE uitree__List_Stack
+#include "list_simple.h"
+
+void uitree__DELME_print_dyna(uitree__List_Stack *list, int depth) {
+    for (int i = 0; i < depth; ++i) { printf("    "); }
+    printfd(ANSI_BLU"↓↓↓");
+    int k = -1;
+    uitree__List_Stack_It it = { 0 };
+    while (uitree__List_Stack_it_next(list, &it)) {
+        ++k;
+        StackItem *item = it.item;
+        for (int i = 0; i < depth; ++i) { printf("    "); }
+        printfd(ANSI_BLU"%d %p: %p %d %d", k, (void*)item, (void*)item->node, item->child_idx, item->depth);
+    }
+}
 
 
 void uitree_build_end(Uitree *t) {
@@ -232,112 +259,77 @@ void uitree_build_end(Uitree *t) {
         uitree__print_tree(t, &t->root_node, 0);
     }
 
-    uitree_Vec_List_DrawInfo layers = uitree_Vec_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
+    uitree__Vec_List_DrawInfo layers = uitree__Vec_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
+
+    // Iterate over tree to calculate children area.
 
     {
-        // Will only push Container nodes to this stack.
-
-        uitree_Vec_Stack stack = uitree_Vec_Stack_create_with_allocator(arena_allocator, &t->arena);
+        Arena arena = t->arena;
+        uitree__List_Stack stack = uitree__List_Stack_create_with_allocator(arena_allocator, &arena);
+        StackItem *item;
 
         t->root_node._area = t->screen;
-        StackItem new_item = {
-            .node = &t->root_node,
-            .child_idx = 0,
-            .depth = 0,
-        };
+        uitree__container_calculate_children_area(t, &arena, &t->root_node);
+        uitree__List_Stack_append(&stack, (StackItem) { .node = &t->root_node, });
 
-        NEW_ITEM:
-        {
-            if (new_item.node->container.children.size > 0) {
-                // Calculate children areas.
-                // Purposefully avoiding VLA here.
-                Arena arena_tmp = t->arena;
-                Rect2i *children_areas = arena_new(&arena_tmp, Rect2i, new_item.node->container.children.size);
-                if (new_item.node->container_func != NULL) {
-                    strview_t identifier = strpool_get(&t->strpool, new_item.node->identifier_strpool_id);
-                    uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier, new_item.node);
-                    wassert(state != NULL);
-                    new_item.node->container_func(new_item.node->_area, new_item.node->container.children.size, children_areas, new_item.node->container.user_ctx, state);
-                    for (int i = 0; i < new_item.node->container.children.size; ++i) {
-                        new_item.node->container.children.items[i]._area = children_areas[i];
-                    }
-                } else {
-                    printfd("ERROR: Container has no 'container_function'.");
+        while (stack.size) {
+            STACK_AREA_CONTINUE:
+            item = uitree__List_Stack_get_tail(&stack);
+            for (; item->child_idx < item->node->container.children.size; ++item->child_idx) {
+                uitree_Node *child = &item->node->container.children.items[item->child_idx];
+                if (child->is_container && child->container.children.size > 0) {
+                    uitree__container_calculate_children_area(t, &arena, child);
+                    ++item->child_idx;
+                    uitree__List_Stack_append(&stack, (StackItem){ .node = child, });
+                    goto STACK_AREA_CONTINUE;
                 }
             }
-            uitree_Vec_Stack_append(&stack, new_item);
-        }
-
-        CONTINUE:
-        {
-            StackItem *curr_item = uitree_Vec_Stack_get_safe(&stack, stack.size-1);
-            uitree_Node *parent = curr_item->node;
-
-            for (; curr_item->child_idx < parent->container.children.size; ++curr_item->child_idx) {
-
-                uitree_Node *node = &parent->container.children.items[curr_item->child_idx];
-
-                if (node->has_user_draw_func) {
-
-                    // Add to collection of DrawInfos.
-
-                    int depth = curr_item->depth;
-                    while(depth >= layers.size) {
-                        uitree_List_DrawInfo new_layer = uitree_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
-                        uitree_Vec_List_DrawInfo_append(&layers, new_layer);
-                    }
-                    uitree_List_DrawInfo *draw_layer = &layers.items[depth];
-                    strview_t identifier = strpool_get(&t->strpool, node->identifier_strpool_id);
-                    //printfd("(i %d) Widget right here! :) id (%d) (%"PRIstr") "Rect2i_Fmt, curr_item->child_idx, node->identifier_strpool_id, PRIstrarg(identifier), Rect2i_Arg(node->_area));
-
-                    // Check if we have state for this one.
-
-                    uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier, node);
-                    uitree_DrawInfo draw_info = {
-                        .user_draw_func_id = node->user_draw_func_id,
-                        .area = node->_area,
-                        .state = state,
-                        .layer = depth,
-                    };
-
-                    uitree_List_DrawInfo_append(draw_layer, draw_info);
-                }
-
-                if (node->is_container) {
-                    ++curr_item->child_idx;
-                    new_item = (StackItem) {
-                        .node = node,
-                        .child_idx = 0,
-                        .depth = curr_item->depth +1,
-                    };
-
-                    goto NEW_ITEM;
-                }
-            }
-
-            // Finished with the children. Let's pop and go up.
-            uitree_Vec_Stack_remove_at(&stack, stack.size-1);
-            if (stack.size > 0) {
-                goto CONTINUE;
-            }
+            uitree__List_Stack_remove_tail(&stack);
         }
     }
 
-    // Populate final list. aka. Flatenning the layers so the user
-    // can just iterate through it.
+    // Calculate drawing order.
 
     t->out_draw_list = uitree_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
 
-    for (int i = layers.size -1; i > -1; i += -1) {
-        uitree_List_DrawInfo_It it = { 0 };
-        while(uitree_List_DrawInfo_it_next(&layers.items[i], &it)) {
-            uitree_List_DrawInfo_append(&t->out_draw_list, *it.item);
-            //printfd(ANSI_CYA"(depth %d) Widget right here! :) "Rect2i_Fmt, i, Rect2i_Arg(it.item->area));
+    {
+        uitree__List_Stack stack = uitree__List_Stack_create_with_allocator(arena_allocator, &t->arena);
+        StackItem *item;
+
+        t->root_node._area = t->screen;
+        uitree__List_Stack_append(&stack, (StackItem) { .node = &t->root_node, });
+        item = uitree__List_Stack_get_tail(&stack); // DELME
+
+        while (stack.size) {
+            STACK_ORDER_CONTINUE:
+            item = uitree__List_Stack_get_tail(&stack);
+
+            for (; item->child_idx < item->node->container.children.size; ++item->child_idx) {
+                uitree_Node *child = &item->node->container.children.items[item->node->container.children.size -1 -item->child_idx];
+
+                if (child->has_user_draw_func) {
+                    strview_t identifier = strpool_get(&t->strpool, child->identifier_strpool_id);
+                    uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier, child);
+                    uitree_DrawInfo draw_info = { .user_draw_func_id = child->user_draw_func_id, .area = child->_area, .state = state, };
+                    uitree_List_DrawInfo_append(&t->out_draw_list, draw_info);
+                }
+
+                if (child->is_container && child->container.children.size > 0) {
+                    uitree__List_Stack_append(&stack, (StackItem){ .node = child, .depth = item->depth +1, });
+                    ++item->child_idx;
+                    goto STACK_ORDER_CONTINUE;
+                }
+            }
+
+            int err = uitree__List_Stack_remove_tail(&stack); // Done with this frame.
+            wassert(err == 0);
         }
     }
 
     t->state_non_persistent = (uitree_WidgetState) { 0 };
+    return;
 }
+
 
 uitree_Node uitree_container_dumb(uitree_ContainerFunc *cont_func) {
     return (uitree_Node) {
@@ -401,10 +393,10 @@ void uitree_container_add_child(Uitree *t, uitree_Node *parent_node, uitree_Node
     }
 
     if (parent_node->container.children.items == NULL) {
-        parent_node->container.children = uitree_Vec_Node_create_with_allocator(arena_allocator, &t->arena);
+        parent_node->container.children = uitree__Vec_Node_create_with_allocator(arena_allocator, &t->arena);
     }
 
-    uitree_Vec_Node_append(&parent_node->container.children, child_node);
+    uitree__Vec_Node_append(&parent_node->container.children, child_node);
 }
 
 #endif

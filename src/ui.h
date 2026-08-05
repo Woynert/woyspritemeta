@@ -10,8 +10,6 @@
 #include "la.h"
 #include "rlgl.h"
 #include "portable_utils.h"
-#include "./standalone/uitree.h"
-#include "ui_common.h"
 
 
 #define DEFAULT_BG LIGHTGRAY
@@ -30,7 +28,8 @@ X( UI_WIDGET_SPRITESHEET_VIEWPORT , ui_widget_spritesheet_viewport ) \
 X( UI_WIDGET_SPRITESHEET_CURSORS  , ui_widget_spritesheet_cursors  ) \
 X( UI_WIDGET_SPRITESHEET_HINTS    , ui_widget_spritesheet_hints    ) \
 X( UI_WIDGET_VSPLIT_DRAG          , ui_widget_vsplit_drag          ) \
-X( UI_WIDGET_3HSPLIT_DRAG         , ui_widget_3hsplit_drag         )
+X( UI_WIDGET_3HSPLIT_DRAG         , ui_widget_3hsplit_drag         ) \
+X( UI_WIDGET_FLOATING_MENU        , ui_widget_floating_menu         )
 
 
 enum UI_WIDGET {
@@ -40,7 +39,19 @@ enum UI_WIDGET {
     UI_WIDGET_AMOUNT
 };
 
+char* UI_WIDGET_STR[] = {
+    #define X(A, ...) #A,
+    WIDGET__TABLE
+    #undef X
+};
+#include "./standalone/uitree.h"
+#include "ui_common.h"
 
+
+V2i ui_measure_text(Ctx *ctx, strview_t str) {
+    return MeasureTextEx_woyi(ctx->draw.font, str, ctx->draw.font_size,
+        ctx->draw.char_spacing, ctx->draw.line_spacing);
+}
 
 void ui_draw_text(Ctx *ctx, strview_t str, V2i pos, Color tint) {
     DrawTextEx_strview_i(ctx->draw.font, str, pos, ctx->draw.font_size,
@@ -230,64 +241,98 @@ void ui__spritesheet_draw_scaled_rect_lines(Rect2i r, V2i translate, int scale, 
     ui__spritesheet_draw_scaled_rect(line, translate, scale, tint);
 }
 
-void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
+
+void ui_setup_floating_menu(Ctx *ctx, const ActionLiteral *actions, int action_count, V2i origin) {
+    const int PAD = 4;
+    for (dyna_foreach(Action, iter, ctx->menu.actions)) {
+        Action *action = iter.ref;
+        strbuf_destroy(&action->name);
+    }
+    Vec_Action_clear_preserving(&ctx->menu.actions);
+    for (int i = 0; i < action_count; ++i) {
+        strbuf_t *name = strbuf_create(actions[i].name, NULL);
+        Vec_Action_append(&ctx->menu.actions, (Action) { .name=name, .op_ptr=actions[i].op_ptr });
+    }
+    ctx->menu.rect.width = 0;
+    int line_count = 0;
+    for (dyna_foreach(Action, iter, ctx->menu.actions)) {
+        V2i measure = ui_measure_text(ctx, strbuf_view2(iter.ref->name));
+        ctx->menu.rect.width = int_max(ctx->menu.rect.width, measure.x);
+        ++line_count;
+    }
+    ctx->menu.open = true;
+    ctx->menu.rect = (Rect2i) {
+        .x = origin.x, .y = origin.y,
+        .width = int_max(150, ctx->menu.rect.width + PAD *4),
+        .height = line_count * ctx->draw.line_height,
+    };
+    ctx->menu.rect = Rect2i_stay_within_Rect2i(ctx->menu.rect, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()}});
+}
+
+
+// @param options. New line separated options.
+// @param out_selected. Index of selected option or -1 if nothing yet.
+// @Returns 0 if user does nothing. -1 if user closed the menu.
+void ui_widget_floating_menu(Ctx *ctx, uitree_DrawInfo info) {
+    (void)info;
+    if (!ctx->menu.open) { return; }
     const int PAD = 2;
     const int line_height = ctx->draw.line_height;
-    const Rect2i area = info.area;
-    int *is_menu_open = &info.state->int_a;
-
-    {
-        Rect2i btn_area = { .x = area.x, .y = area.y, .width = area.width, .height = line_height };
-        bool mouse_in_options_btn = mice_in_rect(btn_area);
-        b_DrawRectangle(btn_area, DEFAULT_BG);
-        if (mouse_in_options_btn) {
-            b_DrawRectangle(btn_area, BLUE);
-            if (mice_pressed(MouseLeft)) {
-                mice_consume(MouseLeft);
-                *is_menu_open = !*is_menu_open;
-            }
-        }
-        b_DrawRectangleLines(btn_area, MAGENTA, 1);
-        b_ui_draw_text(ctx, cstr_SL("Options"), (V2i){{ area.pos.x + PAD, area.pos.y }}, DEFAULT_FG);
-    }
-
-    if (!*is_menu_open) { return; }
-
-    // Drawing menu.
-
-    Rect2i menu_area = { .x = area.x, .y = area.y + line_height, .height = line_height * ctx->actions.size, .width = 400, };
+    Rect2i menu_area = ctx->menu.rect;
     bool mouse_focus = mice_in_rect(menu_area);
-    Rect2i line_area;
-    b_BeginScissorMode(menu_area);
+
     b_DrawRectangle(menu_area, DEFAULT_BG);
 
-    for (int i = 0; i < ctx->actions.size; ++i)
-    {
-        Action *action = &ctx->actions.items[i];
-        line_area = (Rect2i) {{
-            .x = menu_area.x, .y = menu_area.y + i * ctx->draw.line_height,
+    for (dyna_foreach(Action, iter, ctx->menu.actions)) {
+
+        Rect2i line_area = {{
+            .x = menu_area.x, .y = menu_area.y + iter.index * line_height,
             .width = menu_area.width, .height = line_height
         }};
 
         if (mouse_focus && mice_in_rect(line_area)) {
             b_DrawRectangle(line_area, BLUE);
-
             if (mice_pressed(MouseLeft)) {
                 mice_consume(MouseLeft);
-                
-                call_action(ctx, action);
-                *is_menu_open = false;
+                call_action(ctx, iter.ref);
+                ctx->menu.open = false;
             }
         }
 
-        b_ui_draw_text(ctx, strbuf_view2(action->name), (V2i){{ line_area.pos.x+PAD, line_area.pos.y }}, DEFAULT_FG);
+        b_ui_draw_text(ctx, strbuf_view2(iter.ref->name), (V2i){{ line_area.pos.x+PAD, line_area.pos.y }}, DEFAULT_FG);
     }
-    if (mice_pressed(MouseLeft)) { *is_menu_open = false; }
+    if (mice_pressed(MouseLeft)) {
+        mice_consume(MouseLeft);
+        ctx->menu.open = false;
+    }
 
     b_DrawRectangleLines(menu_area, BLACK, 1);
-    b_EndScissorMode();
+    return;
 }
 
+
+void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
+    static const int PAD = 2;
+    static const ActionLiteral menu[] = {
+        {.name = cstr_SL_const("New Project"), .op_ptr = create_new_project},
+        {.name = cstr_SL_const("Open Project"), .op_ptr = no_op},
+        {.name = cstr_SL_const("Save Project"), .op_ptr = no_op},
+        {.name = cstr_SL_const("Load image as spritesheet"), .op_ptr = open_image_as_spritesheet},
+    };
+    const int line_height = ctx->draw.line_height;
+    const Rect2i area = info.area;
+    Rect2i btn_area = { .x = area.x, .y = area.y, .width = area.width, .height = line_height };
+    b_DrawRectangle(btn_area, DEFAULT_BG);
+    if (mice_in_rect(btn_area)) {
+        b_DrawRectangle(btn_area, BLUE);
+        if (mice_pressed(MouseLeft)) {
+            mice_consume(MouseLeft);
+            ui_setup_floating_menu(ctx, menu, countof(menu), v2i(btn_area.x, btn_area.y + btn_area.height));
+        }
+    }
+    b_DrawRectangleLines(btn_area, MAGENTA, 1);
+    b_ui_draw_text(ctx, cstr_SL("Options"), (V2i){{ area.pos.x + PAD, area.pos.y }}, DEFAULT_FG);
+}
 
 
 void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
@@ -299,6 +344,11 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
     const int item_height = ctx->draw.line_height * 2;
     const int text_pad = 3;
     const int thumbnail_pad = 3;
+
+    const ActionLiteral spritesheet_menu[] = {
+        { .name = cstr_SL("Delete"), .op_ptr = action_spritesheet_delete },
+        { .name = cstr_SL("Reload"), .op_ptr = action_spritesheet_reload },
+    };
 
     Rect2i item_area;
     Rect2i thumbnail_area;
@@ -313,10 +363,14 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
 
     bool mouse_focus = mice_in_rect(area);
     {
+        int item_amount = 1;
+        for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+            item_amount += kter.ref->frames.size;
+        }
+
         // Scrolling.
         int scroll_wheel = mouse_focus ? int_sign(mice_wheel()) : 0;
-        ui__calculate_fancy_scroll_px(scroll_px, scroll_vel, area_scroll_viewport.height,
-                ctx->spritesheet_list.size * item_height, scroll_wheel);
+        ui__calculate_fancy_scroll_px(scroll_px, scroll_vel, area_scroll_viewport.height, item_amount * item_height, scroll_wheel);
         area_scroll.y += *scroll_px;
     }
 
@@ -335,10 +389,14 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
         thumbnail_area = Rect2i_add_padding_all(thumbnail_area, thumbnail_pad);
         text_offset = (V2i) {{ thumbnail_area.x + thumbnail_area.width + text_pad, item_area.y + text_pad }};
 
+        if (kter.index == ctx->curr_sheet_id && iter.index == ctx->curr_frame_id) { b_DrawRectangle(item_area, BLUE); }
         if (mouse_focus && mice_in_rect(item_area)) {
             b_DrawRectangle(item_area, BLUE);
 
-            if (mice_held(MouseLeft)) {
+            if (mice_pressed(MouseRight)) {
+                ui_setup_floating_menu(ctx, spritesheet_menu, countof(spritesheet_menu), GetMousePositioni());
+            }
+            if (mice_held(MouseMiddle)) {
                 uint8_t layer_bk = drawbuf_get_layer();
                 drawbuf_set_layer(200);
                 Rect2i preview_area = { .pos = GetMousePositioni(), .size = {{ frame->texture.width, frame->texture.height }} };
@@ -348,7 +406,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
                 b_DrawTextureScaled(frame->texture, preview_area);
                 drawbuf_set_layer(layer_bk);
             }
-            if (mice_released(MouseLeft)) {
+            if (mice_pressed(MouseLeft)) {
                 mice_consume(MouseLeft);
                 select_spritesheet_frame(ctx, kter.index, iter.index);
             }
@@ -529,7 +587,7 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
         line_box.y      = area.y + area.height - line_box.height;
 
         Rect2i chunks[3];
-        Rect2i_split_horizontally(line_box, 3, chunks, { 1/2.f, 1/4.f });
+        Rect2i_split_horizontally(line_box, countof(chunks), chunks, { 1/2.f, 1/4.f });
         Rect2i label_box       = chunks[0];
         Rect2i frame_minus_box = chunks[1];
         Rect2i frame_plus_box  = chunks[2];
@@ -804,7 +862,7 @@ void ui_draw_all(Ctx *ctx) {
     uitree_build_start(t, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()}});
 
     uitree_Node widget;
-    uitree_Node con_tree = uitree_container_dumb(widget_vlist);
+    uitree_Node con_tree = uitree_container_dumb(widget_stack);
 
     {
         uitree_Node con_3split = uitree_container(t, cstr_SL("MainHSplit"),
@@ -853,14 +911,23 @@ void ui_draw_all(Ctx *ctx) {
         uitree_container_add_child(t, &con_tree, con_3split);
     }
 
+    {
+        widget = uitree_widget(UI_WIDGET_FLOATING_MENU);
+        uitree_container_add_child(t, &con_tree, widget);
+    }
+
     t->root_node = con_tree;
     uitree_build_end(t);
 
+    int i = -1;
     uitree_List_DrawInfo_It it = { 0 };
     while(uitree_List_DrawInfo_it_next(&t->out_draw_list, &it)) {
+        ++i;
+        int depth = t->out_draw_list.size - i;
         uitree_DrawInfo draw = *it.item;
-        drawbuf_set_layer((uint8_t)draw.layer);
-        widget_func[it.item->user_draw_func_id](ctx, draw);
+        printfd(Rect2i_Fmt" %s",Rect2i_Arg(draw.area), UI_WIDGET_STR[draw.user_draw_func_id]);
+        drawbuf_set_layer((uint8_t)depth);
+        widget_func[draw.user_draw_func_id](ctx, draw);
     }
     drawbuf_draw_all();
 

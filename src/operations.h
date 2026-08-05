@@ -38,25 +38,6 @@ void free_ctx(Ctx *ctx) {
 }
 
 void _setup_ctx(Ctx *ctx) {
-    // Actions
-    Action action;
-
-    action = (Action) { strbuf_create(0, NULL), create_new_project };
-    strbuf_assign(&action.name, cstr_SL("New Project"));
-    Action_Dyna_append(&ctx->actions, action);
-
-    action = (Action) { strbuf_create(0, NULL), no_op };
-    strbuf_assign(&action.name, cstr_SL("Open Project"));
-    Action_Dyna_append(&ctx->actions, action);
-    
-    action = (Action) { strbuf_create(0, NULL), no_op };
-    strbuf_assign(&action.name, cstr_SL("Save Project"));
-    Action_Dyna_append(&ctx->actions, action);
-
-    action = (Action) { strbuf_create(0, NULL), open_image_as_spritesheet };
-    strbuf_assign(&action.name, cstr_SL("Load image as spritesheet"));
-    Action_Dyna_append(&ctx->actions, action);
-
     zoompanel_init(&ctx->zoompanel, ZOOMPANEL_CONF_PIXEL_PERFECT, MouseRight);
 }
 
@@ -85,6 +66,14 @@ int create_new_project(Ctx *ctx) {
     strbuf_assign(&ctx->curr_project_file_path, cstr(path_result));
     printfd("New project file is %s", path_result);
 
+    return 0;
+}
+
+int action_spritesheet_delete(Ctx *ctx) {
+    return 0;
+}
+
+int action_spritesheet_reload(Ctx *ctx) {
     return 0;
 }
 

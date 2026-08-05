@@ -446,10 +446,11 @@ void Rect2i__split_horizontally(const Rect2i area, int chunk_count, Rect2i *out_
     Rect2i chunk = area;
     chunk.width = 0;
     for (int i = 0; i < chunk_count; ++i) {
-        chunk.width = (int)(fractions[i] * (float)area.width);
         if (i == chunk_count -1) {
             // On last iteration ensure we cover all original width.
             chunk.width = area.x + area.width - chunk.x;
+        } else {
+            chunk.width = (int)(fractions[i] * (float)area.width);
         }
         out_chunks[i] = chunk;
         chunk.x += chunk.width;

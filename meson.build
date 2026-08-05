@@ -36,7 +36,7 @@ add_project_arguments([
   '-fsanitize=address,undefined',
   '-fno-omit-frame-pointer',
   '-g',
-  '-O1', # O1 supposedly better than O0 or O2.
+  '-Og', # O1 supposedly better than O0 or O2.
 ], language:'c')
 add_project_link_arguments([
   '-fsanitize=address,undefined',

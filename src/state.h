@@ -8,10 +8,15 @@
 
 typedef struct Ctx Ctx;
 
-typedef struct Action {
+typedef struct Action { // TODO: DELETE
     strbuf_t *name;
     int (*op_ptr)(Ctx *ctx); /* @Returns Error. */
 } Action;
+
+typedef struct ActionLiteral {
+    strview_t name;
+    int (*op_ptr)(Ctx *ctx); /* @Returns Error. */
+} ActionLiteral;
 
 typedef struct strbuf_wrap {
     strbuf_t *str;
@@ -42,6 +47,10 @@ typedef struct Sprite {
 } Sprite;
 
 #define DYNA__TYPE Action
+#include "da.h"
+
+#define DYNA__TYPE Action
+#define DYNA__NAMESPACE Vec_Action
 #include "da.h"
 
 #define DYNA__TYPE strbuf_wrap
@@ -91,12 +100,18 @@ typedef struct Ctx {
     bool has_project_file_open;
     strbuf_t *curr_project_file_path;
 
-    Action_Dyna actions;
     Vec_Spritesheet spritesheet_list; // A spritesheet vector with N items represents a spritesheet with N frames.
 
     int curr_sheet_id;    // Spritesheet collection.
     int curr_frame_id;    // frame.
     Rect2i curr_sheet_size;
+
+    // Floating menu.
+    struct {
+        bool open;
+        Rect2i rect;
+        Vec_Action actions;
+    } menu;
 
 
     // Sheeteditor widget.

@@ -79,7 +79,7 @@ void Spritesheet_free(Spritesheet *sheet) {
 
 
 int _ctx_init(Ctx *ctx) {
-    ctx->actions = Action_Dyna_create();
+    ctx->menu.actions = Vec_Action_create();
     ctx->spritesheet_list = Vec_Spritesheet_create();
     ctx->curr_project_file_path = strbuf_create_empty(0, NULL);
     ctx->editor.selected_sprites_cursor = int_Dyna_create();
@@ -98,10 +98,11 @@ void _ctx_free(Ctx *ctx) {
     }
 
     strbuf_destroy(&ctx->curr_project_file_path);
-    for (int i = 0; i < ctx->actions.size; ++i) {
-        strbuf_destroy(&ctx->actions.items[i].name);
+
+    for (int i = 0; i < ctx->menu.actions.size; ++i) {
+        strbuf_destroy(&ctx->menu.actions.items[i].name);
     }
-    Action_Dyna_free(&ctx->actions);
+    Vec_Action_free(&ctx->menu.actions);
 
     {
         // Free spritesheet list.
@@ -111,15 +112,6 @@ void _ctx_free(Ctx *ctx) {
         }
         Vec_Spritesheet_free(&ctx->spritesheet_list);
     }
-
-    //{
-        //// Free sprite list.
-        //for (int i = 0; i < ctx->sprites.size; ++i) {
-            //Sprite *sprite = &ctx->sprites.items[i];
-            //strbuf_destroy(&sprite->name);
-        //}
-        //Sprite_Dyna_free(&ctx->sprites);
-    //}
 
     int_Dyna_free(&ctx->editor.selected_sprites_cursor);
     int_Dyna_free(&ctx->editor.selected_sprites);
