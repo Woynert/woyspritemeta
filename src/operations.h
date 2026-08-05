@@ -24,8 +24,7 @@ int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
 
 void _setup_ctx(Ctx *ctx);
 void _add_spritesheet(Ctx *ctx, strview_t path, Image image, Texture texture);
-//void _clear_spritesheet_list(Ctx *ctx);
-//int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path);
+
 
 int init_ctx(Ctx *ctx) {
     _ctx_init(ctx);
@@ -68,75 +67,6 @@ int create_new_project(Ctx *ctx) {
 
     return 0;
 }
-
-int action_spritesheet_delete(Ctx *ctx) {
-    return 0;
-}
-
-int action_spritesheet_reload(Ctx *ctx) {
-    return 0;
-}
-
-//void _add_spritesheet(Ctx *ctx, Vec_Spritesheets new_sheet) {
-    //VecVec_Spritesheet_append(&ctx->spritesheet_list, new_sheet);
-//}
-
-//void _clear_spritesheet_list(Ctx *ctx) {
-    //[>
-    //for (int i = 0; i < ctx->spritesheet_list.size; ++i) {
-        //Spritesheet *s = &ctx->spritesheet_list.items[i];
-        //strbuf_destroy(&s->path);
-        //if (IsImageValid(s->image)) { UnloadImage(s->image); }
-        //if (IsTextureValid(s->texture)) { UnloadTexture(s->texture); }
-    //}
-    //Spritesheet_Dyna_clear_freeing(&ctx->spritesheet_list);
-    //*/
-//}
-
-
-/// @returns Error.
-//int _try_load_image_as_spritesheet(Ctx *ctx, strview_t file_path) {
-    //int return_err = 0;
-
-    //strbuf_t *aux_str = strbuf_create(file_path, NULL); // Raylib only accepts cstrings :'(
-
-    //Image image;
-    //Texture texture;
-
-    //image = LoadImage(aux_str->cstr);
-    //if (!IsImageValid(image)) {
-        //printfd("WAR: Couldn't load image [%"PRIstr"].", PRIstrarg(file_path));
-        //return_err = -1;
-        //goto exit_cleanup;
-    //}
-
-    //if (image.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
-        //printfd("WAR: Image isn't R8G8B8A8, converting...");
-        //ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-    //}
-
-    //texture = LoadTextureFromImage(image);
-    //if (!IsTextureValid(texture)) {
-        //printfd("WAR: Couldn't load texture [%"PRIstr"].", PRIstrarg(file_path));
-        //return_err = -1;
-        //goto exit_cleanup;
-    //};
-
-    //printfd("Sucessfully loaded texture %"PRIstr".", PRIstrarg(file_path));
-
-    //_add_spritesheet(ctx, file_path, image, texture);
-
-    //exit_cleanup:
-    //if ((0)) {
-        //// TODO: Make free spritesheet function.
-        //UnloadImage(image);
-        //UnloadTexture(texture);
-    //}
-
-    //strbuf_destroy(&aux_str);
-    //return return_err;
-//}
-
 
 void spritesheet_clear_selection(Ctx *ctx) {
     int_Dyna_clear_preserving(&ctx->editor.selected_sprites);
@@ -708,51 +638,23 @@ void editor_process_delete(Ctx *ctx) {
 }
 
 
-
-
-//void save_new
-
-//void open_new_file(Ctx *ctx) {
-    //tinyfd_openFileDialog(
-        //NULL,
-        //NULL, // TODO: Set to current project path.
-    
-//}
-
-/*
-...
-
-
-typedef enum EVENT {
-    EVENT_SYMBOL_QUERY,
-    EVENT_MAX,
-} EVENT;
-
-typedef struct EventSymbolQuery {
-    uint symbol_node_id;
-} EventSymbolQuery;
-
-typedef struct Event {
-    EVENT type;
-    union {
-        EventSymbolQuery event_symbol_query;
-    };
-} Event;
-
-...
-
-void WuiState_queue_event_symbol_query(WuiState *w, EventSymbolQuery event) {
-    Event_da_append(&w->events, (Event){ .type = EVENT_SYMBOL_QUERY, .event_symbol_query = event });
+int action_spritesheet_delete(Ctx *ctx) {
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->mouse_selected_spritesheet_id);
+    if (sheet == NULL) { return -1; }
+    int confirm_delete = tinyfd_messageBox("DELETE?", "Delete spritesheet and it’s frames?", "yesno", "warning", 0);
+    if (confirm_delete == 0) { return 0; }
+    if (ctx->mouse_selected_spritesheet_id == ctx->curr_sheet_id) {
+        ctx->curr_sheet_id = -1; ctx->curr_frame_id = 0;
+        ctx->mouse_selected_spritesheet_id = -1;
+    }
+    editor_reset_selection(ctx);
+    Spritesheet_free(sheet);
+    return 0;
 }
 
-...
 
-            if (BetterMouse_is_pressed(MOUSE_LEFT_BUTTON)) {
-                WuiState_queue_event_symbol_query(&ctx->wui_state,
-                    (EventSymbolQuery) {
-                        .symbol_node_id = it.node_id,
-                    }
-                );
-   */
+int action_spritesheet_reload(Ctx *ctx) {
+    return 0;
+}
 
 #endif // !OPERATIONS_H

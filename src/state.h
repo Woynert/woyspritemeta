@@ -8,7 +8,7 @@
 
 typedef struct Ctx Ctx;
 
-typedef struct Action { // TODO: DELETE
+typedef struct Action {
     strbuf_t *name;
     int (*op_ptr)(Ctx *ctx); /* @Returns Error. */
 } Action;
@@ -106,13 +106,14 @@ typedef struct Ctx {
     int curr_frame_id;    // frame.
     Rect2i curr_sheet_size;
 
+    int mouse_selected_spritesheet_id;
+
     // Floating menu.
     struct {
         bool open;
         Rect2i rect;
         Vec_Action actions;
     } menu;
-
 
     // Sheeteditor widget.
     Zoompanel zoompanel;
@@ -134,9 +135,6 @@ typedef struct Ctx {
         // [ @!Group ]
     } editor;
 
-    //Sprite_Dyna sprites;
-    //int selected_sprite; // Instead use int_Dyna_get_safe(selected_sprites, 0);
-
     // [ Arenas ]
     struct {
         ArenaRoot root;
@@ -146,93 +144,7 @@ typedef struct Ctx {
     // [ !Arenas ]
 } Ctx;
 
-
-typedef struct WidgetReq {
-    bool   focus_area_request;
-    bool   focus_area_success;
-    Rect2i focus_area;
-
-    bool scroll_max_px_request;
-    bool scroll_max_px_success;
-    int  scroll_max_px;
-} WidgetReq;
-
-typedef struct WidgetDraw {
-    Rect2i area;
-    bool focused;
-    int scroll_px;
-} WidgetDraw;
-
-typedef enum WIDGET_TYPE {
-    WIDGET_TYPE_NORMAL,
-    WIDGET_TYPE_CONTAINER,
-} WIDGET_TYPE;
-
-typedef struct WidgetData {
-    WIDGET_TYPE type;
-    /*
-    union {
-        struct {
-            int children_count;
-            Widget *children;
-        } split;
-        float split;
-        int mimo;
-        float mimo2;
-    };
-    */
-} WidgetData;
-
-typedef struct Widget {
-    Rect2i screen_area;
-    Rect2i focus_area;
-    bool focused;
-    
-    WidgetDraw draw_info; /* Passed to draw function. */
-
-    void (*draw_function)(Ctx *ctx, const WidgetDraw widget, WidgetReq *req);
-
-    bool scroll_enabled;
-    int scroll_px;
-    int scroll_max_px; /* Max height, reported by the widget draw_function through WidgetReq. */
-
-    WidgetData widget_data;
-} Widget;
-
-//enum WIDEG
-
-typedef struct WidgetMeta {
-    WIDGET_TYPE type;
-    union {
-        struct {
-            void (*draw_function)(Ctx *ctx, const WidgetDraw widget, WidgetReq *req);
-            bool scroll_enabled;
-        } normal;
-        struct {
-            void (*container_function)(Ctx *ctx, int child_count, Widget *children);
-        } container;
-    };
-} WidgetMeta;
-
-typedef enum CONTAINER_TYPE {
-    CONTAINER_TYPE_SPLIT_H_PERCENTAGE,
-    CONTAINER_TYPE_SPLIT_H_PIXEL,
-} CONTAINER_TYPE;
-
-typedef struct WidgetContainer {
-    CONTAINER_TYPE type;
-    union {
-        struct {
-            float percentage;
-            bool adjustable; /* Allows you to adjust the amount of split */
-        } split;
-    };
-} WidgetContainer;
-
 #define MAKEVIEW__TYPE Rect2i
-#include "make_view.h"
-
-#define MAKEVIEW__TYPE Widget
 #include "make_view.h"
 
 #endif // !STATE_H

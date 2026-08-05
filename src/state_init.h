@@ -79,6 +79,7 @@ void Spritesheet_free(Spritesheet *sheet) {
 
 
 int _ctx_init(Ctx *ctx) {
+    ctx->mouse_selected_spritesheet_id = -1;
     ctx->menu.actions = Vec_Action_create();
     ctx->spritesheet_list = Vec_Spritesheet_create();
     ctx->curr_project_file_path = strbuf_create_empty(0, NULL);

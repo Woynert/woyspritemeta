@@ -179,42 +179,6 @@ void ui__calculate_fancy_scroll_px(int *scroll_px, float *vel_px, int container_
 }
 
 
-
-void ui_widget_scroll(Widget *widget) {
-    if (!widget->scroll_enabled) { return; }
-
-    if (widget->focused) {
-        enum { SCROLL_PX = 60 };
-        int scroll = mice_wheel();
-        printfd("Got scroll %d", scroll);
-        if (scroll != 0) {
-            widget->scroll_px -= scroll * SCROLL_PX;
-        }
-        int max_scroll =
-            int_max(widget->scroll_max_px, widget->screen_area.height)
-            - widget->screen_area.height;
-
-        printvalnum(widget->scroll_max_px);
-        printvalnum(widget->screen_area.height);
-        printvalnum(max_scroll);
-
-        widget->scroll_px = int_clamp(0, max_scroll, widget->scroll_px);
-    }
-
-    /* Apply scroll. */
-    widget->draw_info.area.y -= widget->scroll_px;
-
-    /*
-       TODO: Show scrollbar.
-        widget->show_scrollbar = max_scroll > 0;
-
-        if (widget->show_scrollbar) {
-            widget_draw.area.width -= SCROLLBAR_WIDTH_PX;
-        }
-    */
-}
-
-
 void ui__spritesheet_draw_scaled_rect(Rect2i r, V2i translate, int scale, Color tint) {
     b_DrawRectangle((Rect2i) {
         .pos = v2i_translate_scale(r.pos, translate, (float)scale),
@@ -346,7 +310,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
     const int thumbnail_pad = 3;
 
     const ActionLiteral spritesheet_menu[] = {
-        { .name = cstr_SL("Delete"), .op_ptr = action_spritesheet_delete },
+        { .name = cstr_SL("Delete spritesheet and frames."), .op_ptr = action_spritesheet_delete },
         { .name = cstr_SL("Reload"), .op_ptr = action_spritesheet_reload },
     };
 
@@ -395,6 +359,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
 
             if (mice_pressed(MouseRight)) {
                 ui_setup_floating_menu(ctx, spritesheet_menu, countof(spritesheet_menu), GetMousePositioni());
+                ctx->mouse_selected_spritesheet_id = kter.index;
             }
             if (mice_held(MouseMiddle)) {
                 uint8_t layer_bk = drawbuf_get_layer();
@@ -925,7 +890,6 @@ void ui_draw_all(Ctx *ctx) {
         ++i;
         int depth = t->out_draw_list.size - i;
         uitree_DrawInfo draw = *it.item;
-        printfd(Rect2i_Fmt" %s",Rect2i_Arg(draw.area), UI_WIDGET_STR[draw.user_draw_func_id]);
         drawbuf_set_layer((uint8_t)depth);
         widget_func[draw.user_draw_func_id](ctx, draw);
     }
