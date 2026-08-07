@@ -77,12 +77,11 @@ int _ctx_init(Ctx *ctx) {
     ctx->mouse_selected_spritesheet_id = -1;
     ctx->menu.actions = Vec_Action_create();
     ctx->spritesheet_list = Vec_Spritesheet_create();
-    ctx->curr_project_file_path = strbuf_create_empty(0, NULL);
+    ctx->project.path = strbuf_create_empty(0, NULL);
     ctx->editor.selected_sprites_cursor = int_Dyna_create();
     ctx->editor.selected_sprites = int_Dyna_create();
-    ctx->frame_arena.root = ArenaRoot_create(1024 * 1024 * 10); // 10 MB.
-    ctx->frame_arena.arena = ArenaRoot_get_arena(ctx->frame_arena.root);
-    ctx->frame_arena.strbuf_alloc = make_arena_strbuf_allocator(&ctx->frame_arena.arena);
+    ctx->frame_arena_root = ArenaRoot_create(1024 * 1024 * 10); // 10 MB.
+    ctx->frame_arena = ArenaRoot_get_arena(ctx->frame_arena_root);
     return 0;
 }
 
@@ -93,7 +92,7 @@ void _ctx_free(Ctx *ctx) {
         UnloadFont(ctx->draw.font);
     }
 
-    strbuf_destroy(&ctx->curr_project_file_path);
+    strbuf_destroy(&ctx->project.path);
 
     for (int i = 0; i < ctx->menu.actions.size; ++i) {
         strbuf_destroy(&ctx->menu.actions.items[i].name);
@@ -111,7 +110,7 @@ void _ctx_free(Ctx *ctx) {
 
     int_Dyna_free(&ctx->editor.selected_sprites_cursor);
     int_Dyna_free(&ctx->editor.selected_sprites);
-    ArenaRoot_free(&ctx->frame_arena.root);
+    ArenaRoot_free(&ctx->frame_arena_root);
 }
 
 #endif // !STATE_INIT_H

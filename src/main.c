@@ -71,7 +71,7 @@ int main(void) {
         ClearBackground(BLACK);
         
         // Reset arena.
-        ctx.frame_arena.arena = ArenaRoot_get_arena(ctx.frame_arena.root);
+        ctx.frame_arena = ArenaRoot_get_arena(ctx.frame_arena_root);
 
         ui_draw_all(&ctx);
         editor_process_cursor_logic(&ctx);
@@ -79,8 +79,8 @@ int main(void) {
 
         quickmonitor_draw();
         quickmonitor_line("fps %d", GetFPS());
-        ptrdiff_t used = (ptrdiff_t)(ctx.frame_arena.arena.beg - ctx.frame_arena.root.buf);
-        ptrdiff_t total = (ptrdiff_t)(ctx.frame_arena.root.cap);
+        ptrdiff_t used = (ptrdiff_t)(ctx.frame_arena.beg - ctx.frame_arena_root.buf);
+        ptrdiff_t total = (ptrdiff_t)(ctx.frame_arena_root.cap);
         quickmonitor_line("frame_arena %td/%td (%.3f%%)", used, total, ((float)used/(float)total)*100.0);
 
         winput_consume_all();

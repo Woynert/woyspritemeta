@@ -113,6 +113,8 @@ drawbuffer_lab = executable(
   ,c_args : my_extra_args
 )
 
+subdir('./src/standalone')
+
 #scroll_exe = executable(
   #'scroll'
   #,'src/scroll.c'

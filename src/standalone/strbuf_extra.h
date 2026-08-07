@@ -165,6 +165,22 @@ strview_t strnum_get_all_trailing_digits(strview_t s) {
     return (strview_t) { .data = s.data + s.size - length, .size = length };
 }
 
+bool strview_ends_with_strview(strview_t str1, strview_t str2) {
+    if (str2.size == 0) { return true; }
+    if (!strview_is_valid(str1) || !strview_is_valid(str2)) return false;
+    return (str1.size >= str2.size) && (!memcmp(str1.data + str1.size - str2.size, str2.data, (size_t)str2.size));
+}
+
+bool strview_ends_with_cstr(strview_t str1, const char *str2) {
+    return strview_ends_with_strview(str1, cstr(str2));
+}
+
+#define strview_ends_with(str1, str2) _Generic((str2),\
+    const char*: strview_ends_with_cstr,\
+    char*:       strview_ends_with_cstr,\
+    strview_t:   strview_ends_with_strview\
+    )(str1, str2)
+
 /*
 void strbuf_pop_at_index_TEST(void) {
     strbuf_t *line = strbuf_create_init(cstr(""), NULL);

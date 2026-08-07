@@ -53,18 +53,136 @@ void ctx_load_assets(Ctx *ctx) {
 }
 
 
+int write_project_file(Ctx *ctx, const strview_t path) {
+    /*
+    Format reference:
+
+    woyspritemeta,v0.0.0           <- Magic + Version.
+    7                              <- Frame count.
+    0,./assets/spritesheet1.png    <- <id>,<file_path>
+    1,./assets/spritesheet2.png
+    2,./assets/spritesheet3.png
+    3,./assets/items1.png
+    4,./assets/items2.png
+    5,./assets/items3.png
+    6,./assets/effects.png
+    3                   <- Sprite count.
+    unnamed             <- Sprite name.
+    32,32,32,32,0,0,0   <- Sprite origin, size and pivot.
+    0                   <- Sprite frames that corresponds to frame_id.
+    player
+    0,0,32,32,0,0
+    3,0,1,2
+    unnamed
+    160,160,48,48,0,0
+    0
+
+    */
+
+    Arena *arena = &ctx->frame_arena;
+    strbuf_t *data = strbuf_create_with_arena(0, arena);
+    strbuf_assign(&data, cstr_SL("woyspritemeta,v0.0.0\n")); // MAGIC header.
+
+    int frame_total = 0;
+    int sprite_total = 0;
+    for (dyna_foreach(Spritesheet, iter, ctx->spritesheet_list)) {
+        frame_total += iter.ref->frames.size;
+        sprite_total += iter.ref->sprites.size;
+    }
+
+    strbuf_append_printf(&data, "%d\n", frame_total);
+    int frame_i = 0;
+    for (dyna_foreach(Spritesheet, iter, ctx->spritesheet_list)) {
+        Spritesheet *sheet = iter.ref;
+        for (dyna_foreach(SpritesheetFrame, kter, sheet->frames)) {
+            SpritesheetFrame *frame = kter.ref;
+            strbuf_append_printf(&data, "%d,"PRIstrw"\n", frame_i, PRIstrargbuf(frame->path));
+            ++frame_i;
+        }
+    }
+
+    frame_i = 0;
+    strbuf_append_printf(&data, "%d\n", sprite_total);
+    for (dyna_foreach(Spritesheet, iter, ctx->spritesheet_list)) {
+        Spritesheet *sheet = iter.ref;
+        for (dyna_foreach(Sprite, kter, sheet->sprites)) {
+            Sprite *sprite = kter.ref;
+            //strview_t name = sprite->name->size > 0 ? strbuf_view2(sprite->name) : cstr_SL("unnamed");
+            strview_t name = strbuf_view2(sprite->name);
+            strbuf_append_printf(&data, PRIstrw"\n", PRIstrarg(name)); 
+            strbuf_append_printf(&data, "%d,%d,%d,%d,%d,%d\n",
+                sprite->rect.x,
+                sprite->rect.y,
+                sprite->rect.width,
+                sprite->rect.height,
+                0, // Origins are still TBD.
+                0
+            );
+            for (int j = 0; j < sprite->frames; ++j) {
+                strbuf_append_printf(&data, "%d", frame_i + int_clamp(0, sheet->frames.size, j));
+                if (j < sprite->frames-1) {
+                    strbuf_append(&data, cstr_SL(","));
+                }
+            }
+            strbuf_append(&data, cstr_SL("\n"));
+        }
+        frame_i += iter.ref->frames.size;
+    }
+
+    strbuf_t *path_cstr = strbuf_create_with_arena(path, arena);
+    int success = SaveFileData(path_cstr->cstr, data->cstr, data->size);
+    if (!success) {
+        printfd("ERROR: Cannot write file ["PRIstrw"]", PRIstrarg(path));
+        return -1;
+    }
+    printfd("I: Wrote file ["PRIstrw"]", PRIstrarg(path));
+    return 0;
+}
+
+int write_current_project_file(Ctx *ctx) {
+    if (!ctx->project.loaded || !strview_is_valid(strbuf_view2(ctx->project.path))) {
+        // @note. Should be probably kick the user back to the welcome screen?
+        printfd("ERR: Can't save current project, no file opened.");
+        return -1;
+    }
+    return write_project_file(ctx, strbuf_view2(ctx->project.path));
+}
 
 int create_new_project(Ctx *ctx) {
-    const char *file_patterns[] = { "*.wsp" };
+
+    static const strview_t extension = cstr_SL_const(".spri.txt");
+    static const char *file_patterns[] = { "*.spri.txt" };
     const char *path_result = tinyfd_saveFileDialog(
-        "Save new project", NULL, 1, file_patterns, ".wsp");
+        "Save new project as", NULL, 1, file_patterns, extension.data);
     if (path_result == NULL) { return 0; }
 
-    // TODO: Make sure new project file ends in .wsp
+    Arena *arena = &ctx->frame_arena;
+    strbuf_t *new_file_path = strbuf_create_with_arena(cstr(path_result), arena);
 
-    ctx->has_project_file_open = true;
-    strbuf_assign(&ctx->curr_project_file_path, cstr(path_result));
-    printfd("New project file is %s", path_result);
+    if (!strview_ends_with(strbuf_view2(new_file_path), extension)) {
+        strbuf_append_strview(&new_file_path, extension);
+    }
+    if (!strview_ends_with(strbuf_view2(new_file_path), extension)) { return -1; }
+
+    if (FileExists(new_file_path->cstr)) {
+        printfd("File already exists. Refusing to overwrite existing project.");
+        return -1;
+    }
+
+    // Set current opened project.
+
+    strbuf_assign(&ctx->project.path, strbuf_view2(new_file_path));
+    int err = write_project_file(ctx, strbuf_view2(new_file_path));
+    if (err != 0) {
+        printfd("ERR: Failed to create project.");
+        return -1;
+    }
+
+    // Officially we have an open project to work with.
+
+    ctx->project.loaded = true;
+    strbuf_assign(&ctx->project.path, strbuf_view2(new_file_path));
+    printfd("Saved new project file ["PRIstrw"]", PRIstrargbuf(new_file_path));
 
     return 0;
 }
@@ -175,7 +293,7 @@ int open_image_as_spritesheet(Ctx *ctx, strview_t path) {
     }
 
     {
-        Arena arena = ctx->frame_arena.arena;
+        Arena arena = ctx->frame_arena;
         strbuf_t *possible_file_path = strbuf_create_with_arena(0, &arena);
 
         for (;;) {
@@ -601,9 +719,7 @@ void editor_process_delete(Ctx *ctx) {
     if (ctx->editor.selected_sprites.size <= 0) { return; }
 
     // TODO: This dance is ugly... Modify strbuf_t struct?
-    Arena arena = ctx->frame_arena.arena;
-    strbuf_allocator_t arena_allocator = make_arena_strbuf_allocator(&arena);
-    strbuf_t *delete_msg = strbuf_create_empty(0, &arena_allocator);
+    strbuf_t *delete_msg = strbuf_create_with_arena(0, &ctx->frame_arena);
     strbuf_printf(&delete_msg, "Delete %d items? No undo.", ctx->editor.selected_sprites.size);
 
     int confirm_delete = tinyfd_messageBox("DELETE?", delete_msg->cstr, "yesno", "warning", 0);
@@ -651,7 +767,7 @@ int action_spritesheet_reload(Ctx *ctx) {
     SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, 0);
     printfd("Why would it be not valid? "PRIstrw, PRIstrarg(strbuf_view2(frame->path)));
     if (frame == NULL && !strview_is_valid(strbuf_view2(frame->path))) { return -1; }
-    strbuf_t *path = strbuf_create_with_arena(strbuf_view2(frame->path), &ctx->frame_arena.arena);
+    strbuf_t *path = strbuf_create_with_arena(strbuf_view2(frame->path), &ctx->frame_arena);
     ctx->mouse_selected_spritesheet_id = -1;
     return open_image_as_spritesheet(ctx, strbuf_view2(path));
 }

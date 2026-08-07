@@ -268,7 +268,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
     static const ActionLiteral menu[] = {
         {.name = cstr_SL_const("New Project"), .op_ptr = create_new_project},
         {.name = cstr_SL_const("Open Project"), .op_ptr = no_op},
-        {.name = cstr_SL_const("Save Project"), .op_ptr = no_op},
+        {.name = cstr_SL_const("Save Project"), .op_ptr = write_current_project_file},
         {.name = cstr_SL_const("Load image as spritesheet"), .op_ptr = open_image_as_spritesheet_file_dialog},
     };
     const int line_height = ctx->draw.line_height;
@@ -374,7 +374,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
 
         b_ui_draw_text(ctx, strbuf_view2(frame->path), text_offset, DEFAULT_FG);
         if (is_first && sheet->frames.size > 1) {
-            Arena arena = ctx->frame_arena.arena;
+            Arena arena = ctx->frame_arena;
             strbuf_t *frame_count_str = strbuf_create_with_arena(0, &arena);
             strbuf_printf(&frame_count_str, "(%d frames)", sheet->frames.size);
             b_ui_draw_text(ctx, strbuf_view2(frame_count_str), v2i(text_offset.x, text_offset.y + ctx->draw.line_height), DEFAULT_FG);
@@ -398,7 +398,7 @@ void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
     Rect2i area_scroll_viewport = info.area;
     int *scroll_px = &info.state->int_a;
     float *scroll_vel_px = &info.state->float_a;
-    strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
+    strbuf_t *aux_str = strbuf_create_with_arena(0, &ctx->frame_arena);
 
     const int item_height = ctx->draw.line_height * 2;
     const int text_pad = 3;
@@ -647,7 +647,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 
     Rect2i area = info.area;
     bool mouse_focus = mice_in_rect(area);
-    strbuf_t *aux_str = strbuf_create(0, &ctx->frame_arena.strbuf_alloc);
+    strbuf_t *aux_str = strbuf_create_with_arena(0, &ctx->frame_arena);
     V2i mouse = GetMousePositioni();
 
     Spritesheet *sheet = get_current_spritesheet(ctx);

@@ -99,7 +99,6 @@ typedef struct Ctx {
     int ticks; // Frame counter since engine start.
 
     bool has_project_file_open;
-    strbuf_t *curr_project_file_path;
 
     Vec_Spritesheet spritesheet_list; // A spritesheet vector with N items represents a spritesheet with N frames.
 
@@ -112,7 +111,7 @@ typedef struct Ctx {
     Texture splash_art;
     struct {
         bool loaded;
-        strbuf_t *project_file_path;
+        strbuf_t *path;
     } project;
 
     // Floating menu.
@@ -143,11 +142,8 @@ typedef struct Ctx {
     } editor;
 
     // [ Arenas ]
-    struct {
-        ArenaRoot root;
-        Arena arena;
-        strbuf_allocator_t strbuf_alloc;
-    } frame_arena;
+    ArenaRoot frame_arena_root;
+    Arena frame_arena;
     // [ !Arenas ]
 } Ctx;
 
