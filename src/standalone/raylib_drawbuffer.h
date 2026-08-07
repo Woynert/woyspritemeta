@@ -220,6 +220,40 @@ void b_DrawTextureScaled2(Texture2D texture, Rect2i dest, Rect2i source) {
     );
 }
 
+/*
+TODO:
+void b_DrawTextureZoomed(Texture2D texture, Rect2i dest) {
+    float ratio = (float)dest.width / (float)dest.height;
+    b_DrawTexturePro(
+        texture,
+        (Rectangle) {
+            0, 0,
+            (float)texture.width,
+            (float)texture.width / ratio,
+        },
+        (Rect2i_to_Rect2(dest)).rect,
+        Vector2Zero(), 0, WHITE
+    );
+}*/
+
+Rect2i b_draw_texture_pixel_perfect(Texture texture, Rect2i source, Rect2i dest) {
+    Rect2i final = {{ 0 }};
+    int scale_x = find_multiple_max_fit(source.width, dest.width);
+    int scale_y = find_multiple_max_fit(source.height, dest.height);
+    if (scale_x <= 0 || scale_y <= 0) {
+        // Fallback to fraction scaling.
+        final.size = Rect_fit_in_Rect_and_preserve_aspect_ratio(dest.size, source.size);
+    } else {
+        // Pixel perfect scale.
+        final.size = v2i_mul(source.size, v2ii(int_min(scale_x, scale_y)));
+    }
+    // Center.
+    final.pos.x = dest.x + ((dest.width - final.width) / 2);
+    final.pos.y = dest.y + ((dest.height - final.height) / 2);
+    b_DrawTextureScaled2(texture, final, source);
+    return final;
+}
+
 void b_DrawTextureRec_flipped (Texture2D texture, Rect2i source, V2i position, Color tint) {
     b_DrawTextureRec(
         texture,

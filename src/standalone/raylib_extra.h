@@ -466,6 +466,14 @@ Rect2i Rect2i_stay_within_Rect2i(Rect2i r, Rect2i cont) {
     return r;
 }
 
+Rect2i Rect2i_stay_centered_and_contained(Rect2i r, Rect2i cont) {
+    if (r.width > cont.width) { r.width = cont.width; }
+    if (r.height > cont.height) { r.height = cont.height; }
+    r.x = (cont.width - r.width)/2;
+    r.y = (cont.height - r.height)/2;
+    return r;
+}
+
 /*
    // Usage example:
    Rect2i chunks[3];

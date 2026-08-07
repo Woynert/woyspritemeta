@@ -14,6 +14,7 @@
 
 #define DEFAULT_BG LIGHTGRAY
 #define DEFAULT_FG BLACK
+#define GRAY_FG    CLITERAL(Color){ 100, 100, 100, 255 }
 #define ANIMATION_TICKS_PER_FRAME 15
 #define CHECKBOARD_BG (Color){ 200, 200, 200, 255 }
 #define CHECKBOARD_FG (Color){ 0, 0, 0, 20 }
@@ -26,10 +27,11 @@ X( UI_WIDGET_SPRITE_PREVIEW       , ui_widget_sprite_preview       ) \
 X( UI_WIDGET_SPRITESHEET_LIST     , ui_widget_spritesheet_list     ) \
 X( UI_WIDGET_SPRITESHEET_VIEWPORT , ui_widget_spritesheet_viewport ) \
 X( UI_WIDGET_SPRITESHEET_CURSORS  , ui_widget_spritesheet_cursors  ) \
+X( UI_WIDGET_WELCOME_SCREEN       , ui_widget_welcome_screen       ) \
 X( UI_WIDGET_SPRITESHEET_HINTS    , ui_widget_spritesheet_hints    ) \
 X( UI_WIDGET_VSPLIT_DRAG          , ui_widget_vsplit_drag          ) \
 X( UI_WIDGET_3HSPLIT_DRAG         , ui_widget_3hsplit_drag         ) \
-X( UI_WIDGET_FLOATING_MENU        , ui_widget_floating_menu         )
+X( UI_WIDGET_FLOATING_MENU        , ui_widget_floating_menu        )
 
 
 enum UI_WIDGET {
@@ -130,6 +132,7 @@ bool ui__simple_button(Rect2i rect, const int id) {
 }
 
 
+
 /*
    @Note: Draws sprite correctly scaled into container.
    @Returns final calculated transform.
@@ -138,23 +141,7 @@ Rect2i b_ui_draw_sprite(Ctx *ctx, Spritesheet *sheet, Sprite *sprite, Rect2i are
     int frame_id = (ctx->ticks % (sprite->frames * ANIMATION_TICKS_PER_FRAME)) / ANIMATION_TICKS_PER_FRAME;
     SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, frame_id);
     if (!frame) { return (Rect2i) {0}; }
-    Rect2i final = {{ 0 }};
-
-    int scale_x = find_multiple_max_fit(sprite->rect.size.x, area.size.x);
-    int scale_y = find_multiple_max_fit(sprite->rect.size.y, area.size.y);
-    if (scale_x <= 0 || scale_y <= 0) {
-        // Fallback to fraction scaling.
-        final.size = Rect_fit_in_Rect_and_preserve_aspect_ratio(area.size, sprite->rect.size);
-    } else {
-        // Pixel perfect scale.
-        final.size = v2i_mul(sprite->rect.size, v2ii(int_min(scale_x, scale_y)));
-    }
-    // Center.
-    final.pos.x = area.x + ((area.width - final.width) / 2);
-    final.pos.y = area.y + ((area.height - final.height) / 2);
-
-    b_DrawTextureScaled2(frame->texture, final, sprite->rect);
-    return final;
+    return b_draw_texture_pixel_perfect(frame->texture, sprite->rect, area);
 }
 
 
@@ -819,6 +806,104 @@ uitree_Node ui_widget_spritesheet(Uitree *tree) {
     return con_stack;
 }
 
+/// @returns -1 if no option was clicked. Returns >= 0 index of option on click.
+int ui__draw_option_select(Ctx *ctx, const Rect2i area, strview_t *options, int count) {
+    int line_height = ctx->draw.line_height;
+    Rect2i line_area = area;
+    line_area.height = line_height;
+    for (int i = 0; i < count; ++i) {
+        if (mice_in_rect(line_area)) {
+            b_DrawRectangle(line_area, BLUE);
+            if (mice_pressed(MouseLeft)) {
+                mice_consume(MouseLeft);
+                return i;
+            }
+        }
+        b_ui_draw_text_pad(ctx, options[i], line_area.pos, DEFAULT_FG);
+        line_area.y += line_height;
+    }
+    return -1;
+}
+
+void ui_widget_welcome_screen(Ctx *ctx, uitree_DrawInfo info) {
+
+    enum { MAX_WIDTH = 400, MAX_HEIGHT = 500 };
+    const int line_height = ctx->draw.line_height;
+    const Rect2i available_area = info.area;
+    Rect2i area = (Rect2i) {{
+        .width = MAX_WIDTH,
+        .height =  MAX_HEIGHT,
+    }};
+    area = Rect2i_stay_centered_and_contained(area, available_area);
+    area = Rect2i_add_padding_all(area, 10);
+    Rect2i frame_area = area;
+    area = Rect2i_add_padding_all(area, 20);
+
+    b_DrawRectangle(available_area, DARKGRAY);
+    b_DrawCheckerboard(available_area, ColorLerp(DARKGRAY, BLACK, 0.05f), 64);
+    b_DrawRectangleLines(available_area, BLACK, 1);
+    b_DrawRectangle(frame_area, DEFAULT_BG);
+    b_DrawRectangleLines(frame_area, BLACK, 1);
+
+    Rect2i line_area = area;
+    line_area.height = line_height;
+
+    {
+        Rect2i splashart_area = area;
+        splashart_area.height = 64;
+        splashart_area.width = 64;
+        V2i texture_size = {{ ctx->splash_art.width, ctx->splash_art.height }};
+        Rect2i texture_area = b_draw_texture_pixel_perfect(ctx->splash_art, (Rect2i){.size=texture_size,}, splashart_area);
+        b_DrawRectangle(splashart_area, CHECKBOARD_BG);
+        b_DrawCheckerboard(splashart_area, CHECKBOARD_FG, (int)(((float)texture_area.width / (float)texture_size.x) * 8.f));
+        b_draw_texture_pixel_perfect(ctx->splash_art, (Rect2i){.size=texture_size,}, splashart_area);
+        b_DrawRectangleLines(splashart_area, BLACK, 1);
+        line_area.y += splashart_area.height;
+    }
+
+
+    //b_DrawRectangleLines((Rect2i){{line_area.x, line_area.y, line_area.width, line_area.height * 3}}, BLACK, 1);
+
+    line_area.y += line_height;
+    b_ui_draw_text(ctx, cstr_SL("Welcome to WoySpriteMeta"), v2i(line_area.pos.x+0, line_area.pos.y), DEFAULT_FG);
+    line_area.y += line_height;
+    b_ui_draw_text(ctx, cstr_SL("(930a7bdc)"), line_area.pos, DEFAULT_FG);
+    line_area.y += line_height;
+    b_ui_draw_text(ctx, cstr_SL("Visit us at http://github.com/woynert/woyspritemeta"), line_area.pos, DEFAULT_FG);
+    line_area.y += line_height;
+    line_area.y += line_height;
+    b_ui_draw_text(ctx, cstr_SL("File"), line_area.pos, GRAY_FG);
+    line_area.y += line_height;
+
+    // Draw menu.
+
+    const ActionLiteral menu[] = {
+        {.name = cstr_SL_const("New Project"), .op_ptr = create_new_project},
+        {.name = cstr_SL_const("Open Project"), .op_ptr = no_op},
+    };
+
+    strview_t labels[countof(menu)];
+    for (int i = 0; i < countofi(menu); ++i) { labels[i] = menu[i].name; }
+
+    int result = ui__draw_option_select(ctx, line_area, labels, countof(labels));
+    if (int_in_range_inclusive(0, countof(menu), result)) {
+        menu[result].op_ptr(ctx);
+    }
+    //b_DrawRectangleLines((Rect2i){{line_area.x, line_area.y, line_area.width, line_area.height * countofi(menu)}}, BLACK, 1);
+
+    line_area.y += line_height * countofi(menu);
+    //line_area.y += line_height;
+    //b_DrawRectangle((Rect2i){{line_area.x, line_area.y, line_area.width, 3}}, ColorLerp(BLACK, WHITE, 0.6f));
+    //b_DrawRectangle((Rect2i){{line_area.x, line_area.y, line_area.width, 1}}, BLACK);
+    line_area.y += line_height;
+
+    // Draw recent projects.
+
+    b_ui_draw_text(ctx, cstr_SL("Recent projects"), line_area.pos, GRAY_FG);
+    line_area.y += line_height;
+
+}
+
 
 // ↓↓↓ Maps UI_WIDGET to function pointer.
 
@@ -828,7 +913,7 @@ void (*widget_func[]) (Ctx *ctx, uitree_DrawInfo info) = {
     #undef X
 };
 
-void ui_draw_all(Ctx *ctx) {
+void ui_draw_workspace(Ctx *ctx) {
 
     static Uitree tree = { 0 };
     static Uitree *t = &tree;
@@ -910,6 +995,44 @@ void ui_draw_all(Ctx *ctx) {
     drawbuf_draw_all();
 
     //printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (t->arena.end - t->arena.beg)), PRIbytearg(1 << 20));
+}
+
+void ui_draw_welcome_screen(Ctx *ctx) {
+
+    static Uitree tree = { 0 };
+    static Uitree *t = &tree;
+    static bool setup = false;
+    if (!setup) { setup = true; uitree_create(t); }
+
+    uitree_build_start(t, (Rect2i){{.width = GetScreenWidth(), .height = GetScreenHeight()}});
+
+    uitree_Node widget;
+    uitree_Node con_tree = uitree_container_dumb(widget_stack);
+    widget = uitree_widget(UI_WIDGET_WELCOME_SCREEN);
+    uitree_container_add_child(t, &con_tree, widget);
+    t->root_node = con_tree;
+    uitree_build_end(t);
+
+    int i = -1;
+    uitree_List_DrawInfo_It it = { 0 };
+    while(uitree_List_DrawInfo_it_next(&t->out_draw_list, &it)) {
+        ++i;
+        int depth = t->out_draw_list.size - i;
+        uitree_DrawInfo draw = *it.item;
+        drawbuf_set_layer((uint8_t)depth);
+        widget_func[draw.user_draw_func_id](ctx, draw);
+    }
+    drawbuf_draw_all();
+
+    //printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (t->arena.end - t->arena.beg)), PRIbytearg(1 << 20));
+}
+
+void ui_draw_all(Ctx *ctx) {
+    if (ctx->project.loaded) {
+        ui_draw_workspace(ctx);
+    } else {
+        ui_draw_welcome_screen(ctx);
+    }
 }
 
 #endif // !UI

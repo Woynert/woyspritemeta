@@ -48,6 +48,8 @@ void ctx_load_assets(Ctx *ctx) {
     ctx->draw.line_height = ctx->draw.font_size +ctx->draw.line_spacing +2;
     ctx->draw.font = load_font_with_buncha_codepoints(
             "assets/Roboto-Regular.ttf", ctx->draw.font_size);
+    ctx->splash_art = LoadTexture("assets/splash_art.png");
+    wassert(IsTextureValid(ctx->splash_art));
 }
 
 
@@ -83,19 +85,6 @@ void editor_reset_selection(Ctx *ctx) {
 Spritesheet *get_current_spritesheet(Ctx *ctx) {
     return Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_sheet_id);
 }
-
-//void select_spritesheet(Ctx *ctx, int sheet_id) {
-    //Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
-    //if (!sheet) { return; }
-    //ctx->curr_spritesheet_id = sheet_id;
-    //ctx->curr_spritesheet_id = sheet_id;
-//}
-
-//void get_spritesheet_frame(Ctx *ctx, int sheet_id, int frame_id) {
-    //Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
-    //if (sheet == NULL) { return; }
-    //SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, frame_id);
-    //if (frame == NULL) { return; }
 
 void select_spritesheet_frame(Ctx *ctx, int sheet_id, int frame_id) {
     Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);

@@ -109,6 +109,12 @@ typedef struct Ctx {
 
     int mouse_selected_spritesheet_id;
 
+    Texture splash_art;
+    struct {
+        bool loaded;
+        strbuf_t *project_file_path;
+    } project;
+
     // Floating menu.
     struct {
         bool open;
