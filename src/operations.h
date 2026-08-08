@@ -23,6 +23,8 @@ int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
 
 void _setup_ctx(Ctx *ctx);
 void _add_spritesheet(Ctx *ctx, strview_t path, Image image, Texture texture);
+int open_image_as_spritesheet(Ctx *ctx, strview_t path);
+Spritesheet *spritesheet_get_if_exists_from_frame_idx(Ctx *ctx, int idx);
 
 
 int init_ctx(Ctx *ctx) {
@@ -53,6 +55,136 @@ void ctx_load_assets(Ctx *ctx) {
 }
 
 
+Spritesheet *spritesheet_get_if_exists_from_frame_idx(Ctx *ctx, int idx) {
+    int frame_i = 0;
+    for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+        Spritesheet *sheet = kter.ref;
+        for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
+            if (frame_i == idx) { return sheet; }
+            ++frame_i;
+        }
+    }
+    return NULL;
+}
+
+/// @Returns NULL if Spritesheet doesn't exist.
+Spritesheet *spritesheet_get_if_exists(Ctx *ctx, strview_t path, int *out_id) {
+    for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+        Spritesheet *sheet = kter.ref;
+        for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
+            SpritesheetFrame *frame = iter.ref;
+            if (wstrview_equals(path, strbuf_view2(frame->path))) {
+                if (out_id != NULL) { *out_id = kter.index; }
+                return sheet;
+            }
+        }
+    }
+    return NULL;
+}
+
+
+int load_project_file(Ctx *ctx, const strview_t path) {
+    strbuf_t *path_cstr = strbuf_create_with_arena(path, &ctx->frame_arena);
+    strview_t data;
+    strview_t line;
+    {
+        int size;
+        const char* raw_data = (char*)LoadFileData(path_cstr->cstr, &size);
+        data = (strview_t) { .data = raw_data, .size = size, };
+        if (data.data == NULL) {
+            printfd("ERR: Could'nt read file ["PRIstrw"]", PRIstrarg(path));
+            return -1;
+        }
+    }
+
+    // TODO: Clear current ctx.spritesheet and ctx.sprites. or all ctx completely why not.
+    // Clear current existing project.
+    clear_existing_project(ctx);
+
+    // Get magic and version.
+
+    line = wstrview_get_next_line(&data);
+    {
+        strview_t line_bk = line;
+        strview_t magic = strview_split_first_delim(&line_bk, ",", false);
+        if (!wstrview_equals(magic, cstr("woyspritemeta"))) {
+            printfd("ERR Parsing file: Wrong magic.");
+            return -1;
+        }
+        // TODO: Do something with the version.
+    }
+
+    // Get spritesheets.
+
+    line = wstrview_get_next_line(&data);
+    int sheet_count = strnum_int(line, -1, STRNUM_DEFAULT);
+    for (int i = 0; i < sheet_count; ++i) {
+        line = wstrview_get_next_line(&data);
+        strview_t sheet_path;
+        sheet_path = strview_split_right(&line, strview_find_first(line, ","));
+        printfd("The sheet path is "PRIstrw, PRIstrarg(sheet_path));
+
+        // Skip if already loaded.
+        // This usually happens because of numbered frames.
+        if (spritesheet_get_if_exists(ctx, sheet_path, NULL)) { continue; }
+        int err = open_image_as_spritesheet(ctx, sheet_path);
+        if (err != 0) {
+            printfd("WAR: Couldn't load spritesheet.");
+        }
+    }
+
+    // Get sprites
+
+    line = wstrview_get_next_line(&data);
+    int sprite_count = strnum_int(line, -1, STRNUM_DEFAULT);
+    for (int i = 0; i < sprite_count; ++i) {
+        strview_t name = wstrview_get_next_line(&data);
+        strview_t rect = wstrview_get_next_line(&data);
+        strview_t frames = wstrview_get_next_line(&data);
+        Rect2i sprite_rect = { 0 };
+        {
+            sprite_rect.x = strnum_int(strview_split_first_delim(&rect, ",", false), 0, STRNUM_DEFAULT);
+            sprite_rect.y = strnum_int(strview_split_first_delim(&rect, ",", false), 0, STRNUM_DEFAULT);
+            sprite_rect.width = strnum_int(strview_split_first_delim(&rect, ",", false), 0, STRNUM_DEFAULT);
+            sprite_rect.height = strnum_int(strview_split_first_delim(&rect, ",", false), 0, STRNUM_DEFAULT);
+            // @note: We still don't have support for pivot origins.
+        }
+        int frame_id_first = strnum_int(frames, -1, STRNUM_DEFAULT);
+        if (frame_id_first == -1) {
+            printfd("WAR: Wrong spritesheet idx for sprite.");
+            frame_id_first = 0;
+        }
+        int frame_count = 0;
+        for (int k = 0; k < frames.size; ++k) {
+            strview_split_first_delim(&frames, ",", false);
+            ++frame_count;
+        }
+
+        // [ADD SPRITE]
+        Spritesheet *sheet = spritesheet_get_if_exists_from_frame_idx(ctx, frame_id_first);
+        if (sheet == NULL) {
+            printfd("ERR: Couldn't find spritesheet to add sprite to.");
+            continue;
+        }
+        Sprite sprite = sprite_make();
+        strbuf_assign(&sprite.name, name);
+        sprite.rect = sprite_rect;
+        sprite.frames = frame_count;
+        Vec_Sprite_append(&sheet->sprites, sprite);
+        // ![ADD SPRITE]
+
+        printfd("Sprite: ("PRIstrw") ("Rect2i_Fmt") (%d)", PRIstrargbuf(sprite.name), Rect2i_Arg(sprite_rect), sprite.frames);
+    }
+
+    // Officially we have an open project to work with.
+
+    ctx->project.loaded = true;
+    strbuf_assign(&ctx->project.path, path);
+    printfd("I: Succesfully loaded project.");
+
+    return 0;
+}
+
 int write_project_file(Ctx *ctx, const strview_t path) {
     /*
     Format reference:
@@ -69,7 +201,7 @@ int write_project_file(Ctx *ctx, const strview_t path) {
     3                   <- Sprite count.
     unnamed             <- Sprite name.
     32,32,32,32,0,0,0   <- Sprite origin, size and pivot.
-    0                   <- Sprite frames that corresponds to frame_id.
+    0                   <- Sprite frames that correspond to frame_id.
     player
     0,0,32,32,0,0
     3,0,1,2
@@ -107,7 +239,6 @@ int write_project_file(Ctx *ctx, const strview_t path) {
         Spritesheet *sheet = iter.ref;
         for (dyna_foreach(Sprite, kter, sheet->sprites)) {
             Sprite *sprite = kter.ref;
-            //strview_t name = sprite->name->size > 0 ? strbuf_view2(sprite->name) : cstr_SL("unnamed");
             strview_t name = strbuf_view2(sprite->name);
             strbuf_append_printf(&data, PRIstrw"\n", PRIstrarg(name)); 
             strbuf_append_printf(&data, "%d,%d,%d,%d,%d,%d\n",
@@ -169,6 +300,10 @@ int create_new_project(Ctx *ctx) {
         return -1;
     }
 
+    // Reset state.
+
+    clear_existing_project(ctx);
+
     // Set current opened project.
 
     strbuf_assign(&ctx->project.path, strbuf_view2(new_file_path));
@@ -185,6 +320,23 @@ int create_new_project(Ctx *ctx) {
     printfd("Saved new project file ["PRIstrw"]", PRIstrargbuf(new_file_path));
 
     return 0;
+}
+
+int open_existing_project(Ctx *ctx) {
+    static const strview_t extension = cstr_SL_const(".spri.txt");
+    static const char *file_patterns[] = { "*.spri.txt" };
+    const char *path_result = tinyfd_openFileDialog(
+        "Open Existing Project", NULL, 1, file_patterns, "WoySpriteMeta files (.spri.txt)", false);
+    if (path_result == NULL) { return 0; }
+    Arena *arena = &ctx->frame_arena;
+    strbuf_t *file_path = strbuf_create_with_arena(cstr(path_result), arena);
+
+    if (!strview_ends_with(strbuf_view2(file_path), extension)) {
+        printfd("ERR: Wrong file extension, refusing to read file.");
+        return -1;
+    }
+
+    return load_project_file(ctx, strbuf_view2(file_path));
 }
 
 void spritesheet_clear_selection(Ctx *ctx) {
@@ -227,23 +379,7 @@ SpritesheetFrame *get_selected_spritesheet_frame(Ctx *ctx) {
 }
 
 
-/// @Returns NULL if Spritesheet doesn't exist.
-Spritesheet *spritesheet_get_if_exists(Ctx *ctx, strview_t path, int *out_id) {
-    for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
-        Spritesheet *sheet = kter.ref;
-        for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
-            SpritesheetFrame *frame = iter.ref;
-            if (wstrview_equals(path, strbuf_view2(frame->path))) {
-                if (out_id != NULL) { *out_id = kter.index; }
-                return sheet;
-            }
-        }
-    }
-    return NULL;
-}
-
-
-int open_image_as_spritesheet(Ctx *ctx, strview_t path) {
+int open_image_as_spritesheet(Ctx *ctx, const strview_t path) {
 
     // If spritesheet already exists then free it and rebuild.
 
@@ -269,17 +405,25 @@ int open_image_as_spritesheet(Ctx *ctx, strview_t path) {
     strview_t base = path;
     strview_t extension = { 0 };
 
-    if (cwk_path_has_extension(base.data)) {
-        size_t size;
-        cwk_path_get_extension(base.data, &extension.data, &size);
-        extension.size = (int)size;
-        base.size -= extension.size;
+    {
+        strbuf_t *base_cstr = strbuf_create_with_arena(base, &ctx->frame_arena);
+        if (cwk_path_has_extension(base_cstr->cstr)) {
+            size_t size;
+            cwk_path_get_extension(base_cstr->cstr, &extension.data, &size);
+            extension.size = (int)size;
+            base.size -= extension.size;
+        }
+        // TODO: ↑↑↑ Make a cwk fork that accepts sized strings wth.
     }
 
     // Check if basename ends in a single digit number.
 
     strview_t digit_str = strnum_get_all_trailing_digits(base);
     int digit = strnum_int(digit_str, -1, STRNUM_DEFAULT);
+    if ((1)) {
+        printfd("Basename [%"PRIstr"] Extension [%"PRIstr"]", PRIstrarg(base), PRIstrarg(extension));
+        printfd("basename_digit_str [%"PRIstr"] basename_digit [%d]", PRIstrarg(digit_str), digit);
+    }
     if (digit == -1) { goto commit; }
     base.size -= digit_str.size;
 
@@ -287,7 +431,7 @@ int open_image_as_spritesheet(Ctx *ctx, strview_t path) {
     // Check for next frame --> "file_name[digit +1].png"
     // @note: Currently we don't support zero padded digits like 001 002 003.
 
-    if ((0)) {
+    if ((1)) {
         printfd("Basename [%"PRIstr"] Extension [%"PRIstr"]", PRIstrarg(base), PRIstrarg(extension));
         printfd("basename_digit_str [%"PRIstr"] basename_digit [%d]", PRIstrarg(digit_str), digit);
     }
@@ -364,7 +508,6 @@ Font load_font_with_buncha_codepoints(const char* font_path, int font_size) {
     return font;
 }
 
-
 void register_sprite(Ctx *ctx, Rect2i rect) {
     if (Rect2i_is_out_of_bounds(rect, ctx->curr_sheet_size)) {
         return;
@@ -374,11 +517,9 @@ void register_sprite(Ctx *ctx, Rect2i rect) {
     if (sheet == NULL) { return; }
 
     printfd("SAVING SPRITE "V2i_Fmt, V2i_Arg(rect.size));
-    Sprite sprite = {
-        .rect = rect,
-        .name = strbuf_create_empty(0, NULL),
-        .frames = 1,
-    };
+    Sprite sprite = sprite_make();
+    sprite.rect = rect;
+    sprite.frames = 1;
     Vec_Sprite_append(&sheet->sprites, sprite);
 }
 

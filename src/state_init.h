@@ -73,6 +73,38 @@ void Spritesheet_free(Spritesheet *sheet) {
 }
 
 
+Sprite sprite_make(void) {
+    return (Sprite) {
+        .name = strbuf_create_empty(0, NULL),
+        .frames = 1,
+    };
+}
+
+void sprite_free(Sprite *sprite) {
+    strbuf_destroy(&sprite->name);
+}
+
+
+//void vec_sprites_clear_sprites(Vec_Sprite *sprites) {
+    //for (dyna_foreach(Sprite, iter, *sprites)) {
+        //sprite_free(iter.ref);
+    //}
+    //Vec_Sprite_clear_preserving(sprites);
+//}
+
+
+void clear_existing_project(Ctx *ctx) {
+    ctx->project.loaded = false;
+    strbuf_assign(&ctx->project.path, cstr_SL(""));
+
+    for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+        Spritesheet *sheet = kter.ref;
+        Spritesheet_free(sheet);
+    }
+    Vec_Spritesheet_clear_preserving(&ctx->spritesheet_list);
+}
+
+
 int _ctx_init(Ctx *ctx) {
     ctx->mouse_selected_spritesheet_id = -1;
     ctx->menu.actions = Vec_Action_create();

@@ -267,7 +267,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
     static const int PAD = 2;
     static const ActionLiteral menu[] = {
         {.name = cstr_SL_const("New Project"), .op_ptr = create_new_project},
-        {.name = cstr_SL_const("Open Project"), .op_ptr = no_op},
+        {.name = cstr_SL_const("Open Project"), .op_ptr = open_existing_project},
         {.name = cstr_SL_const("Save Project"), .op_ptr = write_current_project_file},
         {.name = cstr_SL_const("Load image as spritesheet"), .op_ptr = open_image_as_spritesheet_file_dialog},
     };
@@ -879,7 +879,7 @@ void ui_widget_welcome_screen(Ctx *ctx, uitree_DrawInfo info) {
 
     const ActionLiteral menu[] = {
         {.name = cstr_SL_const("New Project"), .op_ptr = create_new_project},
-        {.name = cstr_SL_const("Open Project"), .op_ptr = no_op},
+        {.name = cstr_SL_const("Open Project"), .op_ptr = open_existing_project},
     };
 
     strview_t labels[countof(menu)];

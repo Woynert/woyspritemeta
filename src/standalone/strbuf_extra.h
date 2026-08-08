@@ -181,6 +181,10 @@ bool strview_ends_with_cstr(strview_t str1, const char *str2) {
     strview_t:   strview_ends_with_strview\
     )(str1, str2)
 
+strview_t wstrview_get_next_line(strview_t *str_ptr) {
+    return strview_split_first_delim(str_ptr, "\n", false);
+}
+
 /*
 void strbuf_pop_at_index_TEST(void) {
     strbuf_t *line = strbuf_create_init(cstr(""), NULL);
