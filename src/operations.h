@@ -11,6 +11,7 @@
 #include "cwalk.h"
 #include "raylib.h"
 #include "ui_mouse_input.h"
+#include "kinput.h"
 
 
 int init_ctx(Ctx *ctx);
@@ -704,19 +705,18 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     case SHEETEDITOR_CURSOR_TWEAK:
     {
         if (mouse_inside) {
-            if (IsKeyPressed(KEY_G)) {
+            if (kinput_key_pressed(KEY_G)) {
                 spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_DRAG);
                 return;
             }
-            if (IsKeyPressed(KEY_S)) {
+            if (kinput_key_pressed(KEY_S)) {
                 spritesheet_try_set_cursor_mode(ctx, SHEETEDITOR_CURSOR_RESIZE);
                 return;
             }
         }
 
         if (pressed_inside) {
-            bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-            if (!shift) { spritesheet_clear_selection(ctx); }
+            if (!kinput_key_held_SHIFT()) { spritesheet_clear_selection(ctx); }
         }
         if (ctx->editor.mouse_is_selecting) {
             spritesheet_select_append(ctx, selection);
@@ -734,7 +734,7 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     {
         if (mouse_inside) {
             // Delete last added sprite.
-            if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyDown(KEY_Z) && ctx->editor.add_can_undo) {
+            if (kinput_key_held_CTRL() && kinput_key_pressed(KEY_Z) && ctx->editor.add_can_undo) {
                 ctx->editor.add_can_undo = false;
                 Spritesheet *sheet = get_current_spritesheet(ctx);
                 if (sheet) {
@@ -756,7 +756,7 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     {
 
         // Cancel.
-        if (mice_pressed(MouseRight) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
+        if (mice_pressed(MouseRight) || kinput_key_pressed(KEY_ESCAPE) || kinput_key_pressed(KEY_Q)) {
             editor_cancel_drag(ctx);
             spritesheet_reset_cursor_mode(ctx);
             return;
@@ -788,7 +788,7 @@ void editor_process_cursor_mode_logic(Ctx *ctx) {
     case SHEETEDITOR_CURSOR_RESIZE:
     {
         // Cancel.
-        if (mice_pressed(MouseRight) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)) {
+        if (mice_pressed(MouseRight) || kinput_key_pressed(KEY_ESCAPE) || kinput_key_pressed(KEY_Q)) {
             spritesheet_reset_cursor_mode(ctx);
             return;
         }
@@ -826,7 +826,7 @@ void editor_process_cursor_logic(Ctx *ctx) {
                 ctx->editor.selection_origin, ctx->editor.mouse_pos);
 
         // Shift to select a square.
-        if ((IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT))
+        if (kinput_key_held_SHIFT()
             && (
                 ctx->editor.cursor == SHEETEDITOR_CURSOR_ADD
                 || ctx->editor.cursor == SHEETEDITOR_CURSOR_RESIZE
@@ -867,7 +867,7 @@ void editor_cancel_drag(Ctx *ctx) {
 }
 
 void editor_process_delete(Ctx *ctx) {
-    if (!IsKeyPressed(KEY_X)) { return; }
+    if (!kinput_key_pressed(KEY_X)) { return; }
     if (ctx->editor.cursor != SHEETEDITOR_CURSOR_TWEAK) { return; }
     if (ctx->editor.selected_sprites.size <= 0) { return; }
 
@@ -935,9 +935,9 @@ int action_spritesheet_toggle_fold(Ctx *ctx) {
 }
 
 void process_shortcuts(Ctx *ctx) {
-    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_S)) {
+    if (kinput_key_held_CTRL() && kinput_key_pressed(KEY_S)) {
         write_current_project_file(ctx);
-        // TODO: Consume this input.
+        kinput_consume_key(KEY_S);
     }
 }
 

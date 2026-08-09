@@ -7,29 +7,43 @@
 #include "ui.h"
 #include "quick_monitor.h"
 #include "raylib_drawbuffer.h"
+#include "kinput.h"
 
 #define LA_IMPLEMENTATION
 #include "la.h"
 
+
+
+GLFWmousebuttonfun raylib_mouse_callback = NULL;
+GLFWscrollfun raylib_scroll_callback = NULL;
+GLFWkeyfun raylib_key_callback = NULL;
+
 void glfw_mouse_callback(GLFWwindow* w, int button, int action, int mods) {
     winput_glfw_mouse_button_callback(w, button, action, mods);
     uimouseinput_glfw_mouse_button_callback(w, button, action, mods);
+    raylib_mouse_callback(w, button, action, mods);
 }
 
 void glfw_scroll_callback(GLFWwindow* w, double xoffset, double yoffset) {
     winput_glfw_scroll_callback(w, xoffset, yoffset);
+    raylib_scroll_callback(w, xoffset, yoffset);
+}
+
+void glfw_key_callback(GLFWwindow* w, int key, int scancode, int action, int mods) {
+    kinput_glfw_key_callback(w, key, scancode, action, mods);
+    raylib_key_callback(w, key, scancode, action, mods);
 }
 
 void hook_glfw_callbacks(Ctx *ctx) {
     GLFWwindow* window = (GLFWwindow*)GetWindowHandle();
     glfwSetWindowUserPointer(window, ctx);
-    wassert(glfwSetMouseButtonCallback(window, glfw_mouse_callback));
-    wassert(glfwSetScrollCallback(window, glfw_scroll_callback));
+    raylib_mouse_callback = glfwSetMouseButtonCallback(window, glfw_mouse_callback);
+    raylib_scroll_callback = glfwSetScrollCallback(window, glfw_scroll_callback);
+    raylib_key_callback = glfwSetKeyCallback(window, glfw_key_callback);
 }
 
 void process_quit_key_combo(void) {
-    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))
-        && IsKeyPressed(KEY_ESCAPE))
+    if (kinput_key_held_CTRL() && kinput_key_pressed(KEY_ESCAPE))
     {
         GLFWwindow* window = (GLFWwindow*)GetWindowHandle();
         glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -85,6 +99,7 @@ int main(void) {
         quickmonitor_line("frame_arena %td/%td (%.3f%%)", used, total, ((float)used/(float)total)*100.0);
 
         winput_consume_all();
+        kinput_frame_end();
         uimouseinput__frame_end();
         EndDrawing();
     }
