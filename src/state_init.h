@@ -110,6 +110,7 @@ void clear_existing_project(Ctx *ctx) {
     ctx->curr_sheet_id = 0;
     ctx->curr_sheet_size = (Rect2i) {0};
     ctx->mouse_selected_spritesheet_id = 0;
+    zoompanel_reset_zoom_and_pan(&ctx->zoompanel);
 }
 
 

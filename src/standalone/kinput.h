@@ -24,7 +24,6 @@ static inline bool kinput__key_valid(int key) { return int_in_range_inclusive(0,
 
 void kinput_glfw_key_callback(GLFWwindow* w, int key, int scancode, int action, int mods) {
     (void)mods; (void)scancode; (void)w;
-    printfd("Got key %d", key);
     if (!kinput__key_valid(key)) { return; }
     if (action == GLFW_PRESS) {
         KINPUT.key[key].pressed = true;

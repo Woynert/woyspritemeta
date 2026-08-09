@@ -92,32 +92,27 @@ Spritesheet *spritesheet_get_if_exists(Ctx *ctx, strview_t path, int *out_id) {
 
 
 int load_project_file(Ctx *ctx, const strview_t path) {
+    int retval = 0;
     strbuf_t *path_cstr = strbuf_create_with_arena(path, &ctx->frame_arena);
-    strview_t data;
-    strview_t line;
-    {
-        int size;
-        const char* raw_data = (char*)LoadFileData(path_cstr->cstr, &size);
-        data = (strview_t) { .data = raw_data, .size = size, };
-        if (data.data == NULL) {
-            printfd("ERR: Could'nt read file ["PRIstrw"]", PRIstrarg(path));
-            return -1;
-        }
+    int data_size;
+    unsigned char *raw_data = LoadFileData(path_cstr->cstr, &data_size);
+    if (raw_data == NULL) {
+        printfd("ERR: Could'nt read file ["PRIstrw"]", PRIstrarg(path));
+        goto quit_abort;
     }
 
-    // TODO: Clear current ctx.spritesheet and ctx.sprites. or all ctx completely why not.
-    // Clear current existing project.
     clear_existing_project(ctx);
 
     // Get magic and version.
 
-    line = wstrview_get_next_line(&data);
+    strview_t data = (strview_t) { .data = (char*)raw_data, .size = data_size, };
+    strview_t line = wstrview_get_next_line(&data);
     {
         strview_t line_bk = line;
         strview_t magic = strview_split_first_delim(&line_bk, ",", false);
         if (!wstrview_equals(magic, cstr("woyspritemeta"))) {
             printfd("ERR Parsing file: Wrong magic.");
-            return -1;
+            goto quit_abort;
         }
         // TODO: Do something with the version.
     }
@@ -190,7 +185,16 @@ int load_project_file(Ctx *ctx, const strview_t path) {
     strbuf_assign(&ctx->project.path, path);
     printfd("I: Succesfully loaded project.");
 
-    return 0;
+    {
+        if ((0)) {
+            quit_abort:
+            retval = -1;
+        }
+        if (raw_data != NULL) {
+            UnloadFileData(raw_data);
+        }
+        return retval;
+    }
 }
 
 int write_project_file(Ctx *ctx, const strview_t path) {
