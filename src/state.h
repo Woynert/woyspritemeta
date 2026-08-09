@@ -98,20 +98,19 @@ typedef struct Ctx {
     Draw draw;
     int ticks; // Frame counter since engine start.
 
-    bool has_project_file_open;
-
+    // [SPRITESHEET]
     Vec_Spritesheet spritesheet_list; // A spritesheet vector with N items represents a spritesheet with N frames.
-
     int curr_sheet_id;    // Spritesheet collection.
     int curr_frame_id;    // frame.
     Rect2i curr_sheet_size;
-
     int mouse_selected_spritesheet_id;
+    // ![SPRITESHEET]
 
     Texture splash_art;
     struct {
         bool loaded;
         strbuf_t *path;
+        bool unsaved_changes;
     } project;
 
     // Floating menu.

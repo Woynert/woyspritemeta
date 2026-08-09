@@ -270,6 +270,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
         {.name = cstr_SL_const("Open Project"), .op_ptr = open_existing_project},
         {.name = cstr_SL_const("Save Project"), .op_ptr = write_current_project_file},
         {.name = cstr_SL_const("Load image as spritesheet"), .op_ptr = open_image_as_spritesheet_file_dialog},
+        {.name = cstr_SL_const("Quit"), .op_ptr = quit_and_prompt_for_save},
     };
     const int line_height = ctx->draw.line_height;
     const Rect2i area = info.area;

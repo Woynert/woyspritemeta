@@ -95,13 +95,21 @@ void sprite_free(Sprite *sprite) {
 
 void clear_existing_project(Ctx *ctx) {
     ctx->project.loaded = false;
+    ctx->project.unsaved_changes = false;
     strbuf_assign(&ctx->project.path, cstr_SL(""));
+
+    // Reset other state:
 
     for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
         Spritesheet *sheet = kter.ref;
         Spritesheet_free(sheet);
     }
     Vec_Spritesheet_clear_preserving(&ctx->spritesheet_list);
+
+    ctx->curr_frame_id = 0;
+    ctx->curr_sheet_id = 0;
+    ctx->curr_sheet_size = (Rect2i) {0};
+    ctx->mouse_selected_spritesheet_id = 0;
 }
 
 

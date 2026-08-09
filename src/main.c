@@ -73,6 +73,7 @@ int main(void) {
         // Reset arena.
         ctx.frame_arena = ArenaRoot_get_arena(ctx.frame_arena_root);
 
+        process_shortcuts(&ctx);
         ui_draw_all(&ctx);
         editor_process_cursor_logic(&ctx);
         editor_process_delete(&ctx);

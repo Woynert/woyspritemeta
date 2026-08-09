@@ -54,6 +54,13 @@ void ctx_load_assets(Ctx *ctx) {
     wassert(IsTextureValid(ctx->splash_art));
 }
 
+void ctx_flag_unsaved_changes(Ctx *ctx) {
+    ctx->project.unsaved_changes = true;
+}
+
+void ctx_unflag_unsaved_changes(Ctx *ctx) {
+    ctx->project.unsaved_changes = false;
+}
 
 Spritesheet *spritesheet_get_if_exists_from_frame_idx(Ctx *ctx, int idx) {
     int frame_i = 0;
@@ -337,6 +344,11 @@ int open_existing_project(Ctx *ctx) {
     }
 
     return load_project_file(ctx, strbuf_view2(file_path));
+}
+
+int quit_and_prompt_for_save(Ctx *ctx) {
+    // Need to check if any change has been made...
+    return 0;
 }
 
 void spritesheet_clear_selection(Ctx *ctx) {
@@ -920,6 +932,13 @@ int action_spritesheet_toggle_fold(Ctx *ctx) {
     sheet->unfolded = !sheet->unfolded;
     ctx->mouse_selected_spritesheet_id = -1;
     return 0;
+}
+
+void process_shortcuts(Ctx *ctx) {
+    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_S)) {
+        write_current_project_file(ctx);
+        // TODO: Consume this input.
+    }
 }
 
 
