@@ -38,7 +38,7 @@ def apply_patch(directory: str, patch: str):
 fetch_dependency(
 "woycontainer",
 "https://github.com/woynert/woycontainer",
-"e064d8b2d7b0f9aed7218f3c1fe064c785f71ee3")
+"669925eff2f2cd4485ea674f719b7bbe1e94de2f")
 
 fetch_dependency(
 "cwalk",
@@ -48,7 +48,7 @@ fetch_dependency(
 fetch_dependency(
 "mickstr/mickstr",
 "https://github.com/Woynert/mickjc750-str",
-"d20747c7ad9d7898284123987babc310c07101d7")
+"e1646f2bd43c5f47500d74695d7643b3b346b482")
 
 fetch_dependency(
 "raylib",
@@ -61,3 +61,8 @@ fetch_dependency(
 "raygui/raygui",
 "https://github.com/raysan5/raygui",
 "b9971133b2f7b7513904770d565b683a93fb3624")
+
+fetch_dependency(
+"tinyfd/tinyfd",
+"http://git.code.sf.net/p/tinyfiledialogs/code",
+"58f4a241a9afb2996e2beefc938fc8d5002da601")

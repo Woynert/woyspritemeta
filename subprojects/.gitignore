@@ -16,3 +16,6 @@
 !/raygui/raygui_implementation.c
 
 !/raylib-fix-GetWindowHandler.patch
+
+!/tinyfd/
+!/tinyfd/meson.build
