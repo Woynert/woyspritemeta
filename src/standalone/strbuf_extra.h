@@ -5,6 +5,7 @@
 #include "strbuf.h"
 
 #define PRIstrargbuf(buf) PRIstrarg(strbuf_view2(buf))
+#define strview(buf) strbuf_view2(buf)
 
 static inline int _strbuf_int_min(int a, int b) { return a < b ? a : b; }
 static strview_t strbuf_view2(strbuf_t* buf) // TODO: Delete this or justify it.
@@ -26,7 +27,7 @@ void strbuf_update_cstr_size(strbuf_t** buf_ptr, int new_size) {
     strbuf_t* buf = *buf_ptr;
     assert(new_size >= 0 && new_size <= buf->capacity);
     buf->size = new_size;
-    buf->cstr[new_size] = 0;
+    buf->cstr[new_size+1] = 0;
 }
 
 void strbuf_recalculate_size_as_cstr(strbuf_t** buf_ptr) {

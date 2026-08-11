@@ -9,6 +9,7 @@
 #include "strnum.h"
 #include "wstrview.h"
 #include "cwalk.h"
+#include "cwalk_extra.h"
 #include "raylib.h"
 #include "ui_mouse_input.h"
 #include "kinput.h"
@@ -63,16 +64,25 @@ Spritesheet *spritesheet_get_if_exists(Project *p, strview_t path, int *out_id) 
 
 int load_project_file(Ctx *ctx, const strview_t path) {
     Arena scratch = ctx->frame_arena;
-    Project *new_project = Project_make();
-    strbuf_assign(&new_project->path_absolute, path);
+    int retval = 0;
+    unsigned char *raw_data = NULL;
+    Project *new_project = NULL;
 
-    int retval = 0, data_size = 0;
+    // Load file data.
+
+    int data_size = 0;
     strbuf_t *path_cstr = strbuf_create_with_arena(path, &scratch);
-    unsigned char *raw_data = LoadFileData(path_cstr->cstr, &data_size);
+    raw_data = LoadFileData(path_cstr->cstr, &data_size);
     if (raw_data == NULL) {
-        printfd("ERR: Could'nt read file ["PRIstrw"]", PRIstrarg(path));
-        goto quit_abort;
-    }
+        printfd("ERR: Couldn't read file ["PRIstrw"]", PRIstrarg(path)); goto quit_abort; }
+
+    // Create new project.
+
+    new_project = Project_make();
+    strbuf_assign(&new_project->path_file, path);
+    new_project->path_dir = get_dir_from_file_path_and_check_exists(strbuf_view2(new_project->path_file), scratch);
+    if (!strview_is_valid(new_project->path_dir)) {
+        printfd("ERR: Couldn't find project directory."); goto quit_abort; }
 
     // Get magic and version.
 
@@ -94,17 +104,17 @@ int load_project_file(Ctx *ctx, const strview_t path) {
     int sheet_count = strnum_int(line, -1, STRNUM_DEFAULT);
     for (int i = 0; i < sheet_count; ++i) {
         line = wstrview_get_next_line(&data);
-        strview_t sheet_path;
-        sheet_path = strview_split_right(&line, strview_find_first(line, ","));
-        printfd("The sheet path is "PRIstrw, PRIstrarg(sheet_path));
+        strview_t sheet_relative_path;
+        sheet_relative_path = strview_split_right(&line, strview_find_first(line, ","));
 
-        // Skip if already loaded.
-        // This usually happens because of numbered frames.
-        if (spritesheet_get_if_exists(new_project, sheet_path, NULL)) { continue; }
-        int err = open_image_as_spritesheet(new_project, sheet_path, scratch);
-        if (err != 0) {
-            printfd("WAR: Couldn't load spritesheet.");
-        }
+        strbuf_t *sheet_abs_path = strbuf_create_with_arena(0, &scratch);
+        wcwk_path_join(new_project->path_dir, sheet_relative_path, &sheet_abs_path, &scratch);
+
+        // Skip if already loaded. This usually happens because of numbered frames.
+
+        if (spritesheet_get_if_exists(new_project, strbuf_view2(sheet_abs_path), NULL)) { continue; }
+        int err = open_image_as_spritesheet(new_project, strbuf_view2(sheet_abs_path), scratch);
+        if (err != 0) { printfd("WAR: Couldn't load spritesheet."); }
     }
 
     // Get sprites
@@ -213,7 +223,7 @@ int write_project_file(Ctx *ctx, const strview_t path) {
         Spritesheet *sheet = iter.ref;
         for (dyna_foreach(SpritesheetFrame, kter, sheet->frames)) {
             SpritesheetFrame *frame = kter.ref;
-            strbuf_append_printf(&data, "%d,"PRIstrw"\n", frame_i, PRIstrargbuf(frame->path));
+            strbuf_append_printf(&data, "%d,"PRIstrw"\n", frame_i, PRIstrargbuf(frame->relative_path));
             ++frame_i;
         }
     }
@@ -256,12 +266,12 @@ int write_project_file(Ctx *ctx, const strview_t path) {
 }
 
 int write_current_project_file(Ctx *ctx) {
-    if (!ctx->project_loaded || !strview_is_valid(strbuf_view2(ctx->p->path_absolute))) {
+    if (!ctx->project_loaded || !strview_is_valid(strbuf_view2(ctx->p->path_file))) {
         // @note. Should we probably kick the user back to the welcome screen?
         printfd("ERR: Can't save current project, no file opened.");
         return -1;
     }
-    return write_project_file(ctx, strbuf_view2(ctx->p->path_absolute));
+    return write_project_file(ctx, strbuf_view2(ctx->p->path_file));
 }
 
 int create_new_project(Ctx *ctx) {
@@ -270,8 +280,7 @@ int create_new_project(Ctx *ctx) {
     const char *path_result = tinyfd_saveFileDialog("Save new project as", NULL, 1, file_patterns, extension.data);
     if (path_result == NULL) { return 0; }
 
-    Arena *arena = &ctx->frame_arena;
-    strbuf_t *new_file_path = strbuf_create_with_arena(cstr(path_result), arena);
+    strbuf_t *new_file_path = strbuf_create_with_arena(cstr(path_result), &ctx->frame_arena);
 
     if (!strview_ends_with(strbuf_view2(new_file_path), extension)) {
         strbuf_append_strview(&new_file_path, extension);
@@ -283,13 +292,11 @@ int create_new_project(Ctx *ctx) {
     }
 
     // Write.
+
     int err = write_project_file(ctx, strbuf_view2(new_file_path));
     if (err != 0) { printfd("ERR: Failed to create project."); return -1; }
-
-    // Setup new project.
-    ctx_clear_curr_project(ctx);
-    ctx->project_loaded = true;
-    strbuf_assign(&ctx->p->path_absolute, strbuf_view2(new_file_path));
+    err = load_project_file(ctx, strview(new_file_path));
+    if (err != 0) { printfd("ERR: Failed to create project."); return -1; }
     printfd("Saved new project file ["PRIstrw"]", PRIstrargbuf(new_file_path));
     return 0;
 }
@@ -354,42 +361,33 @@ SpritesheetFrame *get_selected_spritesheet_frame(Ctx *ctx) {
     return Vec_SpritesheetFrame_get_safe(&sheet->frames, ctx->curr_frame_id);
 }
 
-
-int open_image_as_spritesheet(Project *p, const strview_t path, Arena scratch) {
+int open_image_as_spritesheet(Project *p, const strview_t path_abs, Arena scratch) {
+    {
+        // #ifdef DEBUG ONLY
+        // @note DELETE ME
+        strview_t project_dir = get_dir_from_file_path_and_check_exists(strbuf_view2(p->path_file), scratch);
+        if (!strview_is_valid(project_dir)) { printfd("ERR: Couldn't find project directory."); return -1; }
+        strbuf_t *relative_path = strbuf_create_with_arena(0, &scratch);
+        wcwk_path_get_relative(project_dir, path_abs, &relative_path, &scratch);
+        strbuf_t *full_path = strbuf_create_with_arena(0, &scratch);
+        wcwk_path_join(project_dir, strview(relative_path), &full_path, &scratch);
+        printfd(ANSI_MAG"Path from "PRIstrw" to "PRIstrw" got relative path: {"PRIstrw"}",
+                PRIstrarg(project_dir), PRIstrarg(path_abs), PRIstrargbuf(relative_path));
+        printfd("Got fullpath "PRIstrw, PRIstrargbuf(full_path));
+        wassert(IsPathFile_arena(strbuf_view2(full_path), scratch));
+        // #endif
+    }
 
     // If spritesheet already exists then free it and rebuild.
 
     int sheet_id;
-    Spritesheet *new_sheet = spritesheet_get_if_exists(p, path, &sheet_id);
+    Spritesheet *new_sheet = spritesheet_get_if_exists(p, path_abs, &sheet_id);
     if (new_sheet != NULL) { Spritesheet_clear_frames(new_sheet); }
-
-    // Get relative path.
-
-    strbuf_t *project_dir = strbuf_create_with_arena(strbuf_view2(p->path_absolute), &scratch);
-    size_t project_dir_size;
-    cwk_path_get_dirname(project_dir->cstr, &project_dir_size);
-    strbuf_update_cstr_size(&project_dir, (int)project_dir_size);
-    printfd("project_dir -> "PRIstrw, PRIstrargbuf(project_dir));
-    if (!IsPathDirectory(project_dir->cstr)) {
-        printfd("ERR: Not a directory.");
-        return -1;
-    }
-
-    strbuf_t *sheet_path = strbuf_create_with_arena(path, &scratch);
-    size_t required_size = cwk_path_get_relative(project_dir->cstr, sheet_path->cstr, NULL, 0);
-    strbuf_t *relative_path = strbuf_create_with_arena(required_size, &scratch);
-    cwk_path_get_relative(p->path_absolute->cstr, sheet_path->cstr, relative_path->cstr, required_size);
-    strbuf_update_cstr_size(&relative_path, (int)required_size);
-    printfd(ANSI_MAG"Path from "PRIstrw" to "PRIstrw" got relative path: "PRIstrw,
-            PRIstrargbuf(p->path_absolute),
-            PRIstrarg(path),
-            PRIstrargbuf(relative_path)
-        );
 
     // Load from path.
 
     SpritesheetFrame frame = {0};
-    int err = SpritesheetFrame_make(path, &frame);
+    int err = SpritesheetFrame_make(p->path_dir, path_abs, &frame, scratch);
     if (err != 0) { return -1; }
     if (new_sheet == NULL) {
         Spritesheet _new_sheet = Spritesheet_make();
@@ -401,7 +399,7 @@ int open_image_as_spritesheet(Project *p, const strview_t path, Arena scratch) {
 
     // Get base and extension.
 
-    strview_t base = path;
+    strview_t base = path_abs;
     strview_t extension = { 0 };
 
     {
@@ -441,7 +439,7 @@ int open_image_as_spritesheet(Project *p, const strview_t path, Arena scratch) {
         for (;;) {
             ++digit;
             strbuf_printf(&possible_file_path, PRIstrw"%d"PRIstrw, PRIstrarg(base), digit, PRIstrarg(extension));
-            err = SpritesheetFrame_make(strbuf_view2(possible_file_path), &frame);
+            err = SpritesheetFrame_make(p->path_dir, strbuf_view2(possible_file_path), &frame, scratch);
             if (err != 0) { break; }
             Vec_SpritesheetFrame_append(&new_sheet->frames, frame);
         }

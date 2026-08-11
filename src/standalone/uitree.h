@@ -259,8 +259,6 @@ void uitree_build_end(Uitree *t) {
         uitree__print_tree(t, &t->root_node, 0);
     }
 
-    uitree__Vec_List_DrawInfo layers = uitree__Vec_List_DrawInfo_create_with_allocator(arena_allocator, &t->arena);
-
     // Iterate over tree to calculate children area.
 
     {

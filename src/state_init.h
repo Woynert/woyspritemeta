@@ -1,6 +1,7 @@
 #ifndef STATE_INIT_H
 #define STATE_INIT_H
 
+#include "cwalk_extra.h"
 #include "state.h"
 #include "arena_extra.h"
 #include "raylib_extra.h"
@@ -8,17 +9,21 @@
 
 void SpritesheetFrame_free(SpritesheetFrame *frame) {
     strbuf_destroy(&frame->path);
+    strbuf_destroy(&frame->relative_path);
     if (IsImageValid(frame->image)) { UnloadImage(frame->image); }
     if (IsTextureValid(frame->texture)) { UnloadTexture(frame->texture); }
     *frame = (SpritesheetFrame) {0};
 }
 
-int SpritesheetFrame_make(strview_t file_path, SpritesheetFrame *out_frame) {
+int SpritesheetFrame_make(strview_t project_relative_path, strview_t path_abs, SpritesheetFrame *out_frame, Arena scratch) {
     SpritesheetFrame frame = { 0 };
-    frame.path = strbuf_create(file_path, NULL);
+    frame.path = strbuf_create(path_abs, NULL);
+    frame.relative_path = strbuf_create(0, NULL);
+    wcwk_path_get_relative(project_relative_path, path_abs, &frame.relative_path, &scratch);
+
     frame.image = LoadImage(frame.path->cstr);
     if (!IsImageValid(frame.image)) {
-        printfd("WAR: Couldn't load image [%"PRIstr"].", PRIstrarg(file_path));
+        printfd("WAR: Couldn't load image [%"PRIstr"].", PRIstrarg(path_abs));
         goto abort;
     }
 
@@ -29,7 +34,7 @@ int SpritesheetFrame_make(strview_t file_path, SpritesheetFrame *out_frame) {
 
     frame.texture = LoadTextureFromImage(frame.image);
     if (!IsTextureValid(frame.texture)) {
-        printfd("WAR: Couldn't load texture [%"PRIstr"].", PRIstrarg(file_path));
+        printfd("WAR: Couldn't load texture [%"PRIstr"].", PRIstrarg(path_abs));
         goto abort;
     };
 
@@ -95,7 +100,7 @@ void sprite_free(Sprite *sprite) {
 //}
 
 void Project_init(Project *p) {
-    p->path_absolute = strbuf_create(0, NULL);
+    p->path_file = strbuf_create(0, NULL);
     p->spritesheet_list = Vec_Spritesheet_create();
 }
 
@@ -106,7 +111,7 @@ Project *Project_make(void) {
 }
 
 void Project_clear(Project *p) {
-    strbuf_assign(&p->path_absolute, cstr_SL(""));
+    strbuf_assign(&p->path_file, cstr_SL(""));
     for (dyna_foreach(Spritesheet, kter, p->spritesheet_list)) {
         Spritesheet_free(kter.ref);
     }
@@ -115,7 +120,7 @@ void Project_clear(Project *p) {
 
 void Project_free(Project *p) {
     if (!p) { return; }
-    strbuf_destroy(&p->path_absolute);
+    strbuf_destroy(&p->path_file);
     for (dyna_foreach(Spritesheet, kter, p->spritesheet_list)) {
         Spritesheet_free(kter.ref);
     }

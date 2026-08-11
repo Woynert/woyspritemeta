@@ -22,6 +22,7 @@ typedef struct ActionLiteral {
 
 typedef struct SpritesheetFrame {
     strbuf_t *path;
+    strbuf_t *relative_path; /* Relative from _Project File Dir_ to it. */
     Image image;     /* CPU side. */
     Texture texture; /* GPU side. */
 } SpritesheetFrame;
@@ -85,7 +86,8 @@ typedef enum SHEETEDITOR_CURSOR {
 
 
 typedef struct Project {
-    strbuf_t *path_absolute;
+    strbuf_t *path_file; // Absolute.
+    strview_t path_dir;  // Absolute.
     Vec_Spritesheet spritesheet_list;
 } Project;
 
