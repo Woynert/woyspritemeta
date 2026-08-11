@@ -925,8 +925,12 @@ void ui_widget_status_bar(Ctx *ctx, uitree_DrawInfo info) {
 
     strbuf_printf(&str,
         "Current Project: "PRIstrw
+        "%s"
+        " | Mouse (%d,%d)"
         ,
-        PRIstrargbuf(ctx->p->path_file)
+        PRIstrargbuf(ctx->p->path_file),
+        ctx->has_unsaved_changes ? " [+] " : "",
+        ctx->editor.mouse_pos.x, ctx->editor.mouse_pos.y
     );
 
     b_ui_draw_text(ctx, strview(str), v2i(area.x + 10, area.y), DEFAULT_BG);

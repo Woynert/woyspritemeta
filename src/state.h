@@ -143,4 +143,6 @@ typedef struct Ctx {
 
 } Ctx;
 
+static bool WINDOW_SHOULD_CLOSE = false;
+
 #endif // !STATE_H

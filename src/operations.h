@@ -318,7 +318,10 @@ int open_existing_project(Ctx *ctx) {
 }
 
 int quit_and_prompt_for_save(Ctx *ctx) {
-    // Need to check if any change has been made...
+    if (ctx->has_unsaved_changes) {
+        // TODO: Need to check if any change has been made...
+    }
+    WINDOW_SHOULD_CLOSE = true;
     return 0;
 }
 

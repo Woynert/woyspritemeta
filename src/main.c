@@ -71,7 +71,7 @@ int main(void) {
     hook_glfw_callbacks();
     ctx_load_assets(&ctx);
 
-    while(!WindowShouldClose())
+    while(!WindowShouldClose() && !WINDOW_SHOULD_CLOSE)
     {
         ++ctx.ticks;
         process_quit_key_combo();
