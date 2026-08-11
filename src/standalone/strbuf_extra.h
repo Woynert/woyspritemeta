@@ -1,6 +1,7 @@
 #ifndef STRBUF_EXTRA_H
 #define STRBUF_EXTRA_H
 
+#include <assert.h>
 #include "strbuf.h"
 
 #define PRIstrargbuf(buf) PRIstrarg(strbuf_view2(buf))
@@ -21,9 +22,17 @@ static strview_t strbuf_view2(strbuf_t* buf) // TODO: Delete this or justify it.
     (strbuf).buf.capacity=(cap); (strbuf).buf.size=0; (strbuf).buf.allocator.allocator=NULL; (strbuf).buf.allocator.app_data=NULL; (strbuf).bdy[0]=0; \
 } while(0)
 
+void strbuf_update_cstr_size(strbuf_t** buf_ptr, int new_size) {
+    strbuf_t* buf = *buf_ptr;
+    assert(new_size >= 0 && new_size <= buf->capacity);
+    buf->size = new_size;
+    buf->cstr[new_size] = 0;
+}
+
 void strbuf_recalculate_size_as_cstr(strbuf_t** buf_ptr) {
     strbuf_t* buf = *buf_ptr;
     buf->size = (int)strlen(buf->cstr);
+    asm("int3"); // TODO: Set the null terminator!
 }
 
 /**

@@ -15,57 +15,27 @@
 
 
 int init_ctx(Ctx *ctx);
-void free_ctx(Ctx *ctx);
 int create_new_project(Ctx *ctx);
 void call_action(Ctx *ctx, Action *action);
-Font load_font_with_buncha_codepoints(const char* font_path, int font_size);
-void ctx_load_assets(Ctx *ctx);
 int no_op(Ctx *ctx) { printfd("TODO"); return 0; }
-
 void _setup_ctx(Ctx *ctx);
 void _add_spritesheet(Ctx *ctx, strview_t path, Image image, Texture texture);
-int open_image_as_spritesheet(Ctx *ctx, strview_t path);
-Spritesheet *spritesheet_get_if_exists_from_frame_idx(Ctx *ctx, int idx);
+int open_image_as_spritesheet(Project *p, const strview_t path, Arena scratch);
+Spritesheet *spritesheet_get_if_exists_from_frame_idx(Project *p, int idx);
+void select_spritesheet_frame(Ctx *ctx, int sheet_id, int frame_id);
 
-
-int init_ctx(Ctx *ctx) {
-    _ctx_init(ctx);
-    _setup_ctx(ctx);
-    return 0;
-}
-
-void free_ctx(Ctx *ctx) {
-    _ctx_free(ctx);
-}
-
-void _setup_ctx(Ctx *ctx) {
-    zoompanel_init(&ctx->zoompanel, ZOOMPANEL_CONF_PIXEL_PERFECT, MouseRight);
-}
-
-void ctx_load_assets(Ctx *ctx) {
-
-    // Draw
-    ctx->draw.font_size = 18;
-    ctx->draw.line_spacing = 0;
-    ctx->draw.char_spacing = 0;
-    ctx->draw.line_height = ctx->draw.font_size +ctx->draw.line_spacing +2;
-    ctx->draw.font = load_font_with_buncha_codepoints(
-            "assets/Roboto-Regular.ttf", ctx->draw.font_size);
-    ctx->splash_art = LoadTexture("assets/splash_art.png");
-    wassert(IsTextureValid(ctx->splash_art));
-}
 
 void ctx_flag_unsaved_changes(Ctx *ctx) {
-    ctx->project.unsaved_changes = true;
+    ctx->has_unsaved_changes = true;
 }
 
 void ctx_unflag_unsaved_changes(Ctx *ctx) {
-    ctx->project.unsaved_changes = false;
+    ctx->has_unsaved_changes = false;
 }
 
-Spritesheet *spritesheet_get_if_exists_from_frame_idx(Ctx *ctx, int idx) {
+Spritesheet *spritesheet_get_if_exists_from_frame_idx(Project *p, int idx) {
     int frame_i = 0;
-    for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+    for (dyna_foreach(Spritesheet, kter, p->spritesheet_list)) {
         Spritesheet *sheet = kter.ref;
         for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
             if (frame_i == idx) { return sheet; }
@@ -76,8 +46,8 @@ Spritesheet *spritesheet_get_if_exists_from_frame_idx(Ctx *ctx, int idx) {
 }
 
 /// @Returns NULL if Spritesheet doesn't exist.
-Spritesheet *spritesheet_get_if_exists(Ctx *ctx, strview_t path, int *out_id) {
-    for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+Spritesheet *spritesheet_get_if_exists(Project *p, strview_t path, int *out_id) {
+    for (dyna_foreach(Spritesheet, kter, p->spritesheet_list)) {
         Spritesheet *sheet = kter.ref;
         for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
             SpritesheetFrame *frame = iter.ref;
@@ -92,16 +62,17 @@ Spritesheet *spritesheet_get_if_exists(Ctx *ctx, strview_t path, int *out_id) {
 
 
 int load_project_file(Ctx *ctx, const strview_t path) {
-    int retval = 0;
-    strbuf_t *path_cstr = strbuf_create_with_arena(path, &ctx->frame_arena);
-    int data_size;
+    Arena scratch = ctx->frame_arena;
+    Project *new_project = Project_make();
+    strbuf_assign(&new_project->path_absolute, path);
+
+    int retval = 0, data_size = 0;
+    strbuf_t *path_cstr = strbuf_create_with_arena(path, &scratch);
     unsigned char *raw_data = LoadFileData(path_cstr->cstr, &data_size);
     if (raw_data == NULL) {
         printfd("ERR: Could'nt read file ["PRIstrw"]", PRIstrarg(path));
         goto quit_abort;
     }
-
-    clear_existing_project(ctx);
 
     // Get magic and version.
 
@@ -129,8 +100,8 @@ int load_project_file(Ctx *ctx, const strview_t path) {
 
         // Skip if already loaded.
         // This usually happens because of numbered frames.
-        if (spritesheet_get_if_exists(ctx, sheet_path, NULL)) { continue; }
-        int err = open_image_as_spritesheet(ctx, sheet_path);
+        if (spritesheet_get_if_exists(new_project, sheet_path, NULL)) { continue; }
+        int err = open_image_as_spritesheet(new_project, sheet_path, scratch);
         if (err != 0) {
             printfd("WAR: Couldn't load spritesheet.");
         }
@@ -164,7 +135,7 @@ int load_project_file(Ctx *ctx, const strview_t path) {
         }
 
         // [ADD SPRITE]
-        Spritesheet *sheet = spritesheet_get_if_exists_from_frame_idx(ctx, frame_id_first);
+        Spritesheet *sheet = spritesheet_get_if_exists_from_frame_idx(new_project, frame_id_first);
         if (sheet == NULL) {
             printfd("ERR: Couldn't find spritesheet to add sprite to.");
             continue;
@@ -179,22 +150,24 @@ int load_project_file(Ctx *ctx, const strview_t path) {
         printfd("Sprite: ("PRIstrw") ("Rect2i_Fmt") (%d)", PRIstrargbuf(sprite.name), Rect2i_Arg(sprite_rect), sprite.frames);
     }
 
-    // Officially we have an open project to work with.
+    // Success.
 
-    ctx->project.loaded = true;
-    strbuf_assign(&ctx->project.path, path);
+    ctx_clear_curr_project(ctx);
+    Project_free(ctx->p);
+    ctx->p = new_project;
+    ctx->project_loaded = true;
+    select_spritesheet_frame(ctx, 0, 0);
     printfd("I: Succesfully loaded project.");
 
-    {
-        if ((0)) {
-            quit_abort:
-            retval = -1;
-        }
-        if (raw_data != NULL) {
-            UnloadFileData(raw_data);
-        }
-        return retval;
+    if ((0)) {
+        quit_abort:
+        retval = -1;
+        Project_free(new_project);
     }
+    if (raw_data != NULL) {
+        UnloadFileData(raw_data);
+    }
+    return retval;
 }
 
 int write_project_file(Ctx *ctx, const strview_t path) {
@@ -229,14 +202,14 @@ int write_project_file(Ctx *ctx, const strview_t path) {
 
     int frame_total = 0;
     int sprite_total = 0;
-    for (dyna_foreach(Spritesheet, iter, ctx->spritesheet_list)) {
+    for (dyna_foreach(Spritesheet, iter, ctx->p->spritesheet_list)) {
         frame_total += iter.ref->frames.size;
         sprite_total += iter.ref->sprites.size;
     }
 
     strbuf_append_printf(&data, "%d\n", frame_total);
     int frame_i = 0;
-    for (dyna_foreach(Spritesheet, iter, ctx->spritesheet_list)) {
+    for (dyna_foreach(Spritesheet, iter, ctx->p->spritesheet_list)) {
         Spritesheet *sheet = iter.ref;
         for (dyna_foreach(SpritesheetFrame, kter, sheet->frames)) {
             SpritesheetFrame *frame = kter.ref;
@@ -247,7 +220,7 @@ int write_project_file(Ctx *ctx, const strview_t path) {
 
     frame_i = 0;
     strbuf_append_printf(&data, "%d\n", sprite_total);
-    for (dyna_foreach(Spritesheet, iter, ctx->spritesheet_list)) {
+    for (dyna_foreach(Spritesheet, iter, ctx->p->spritesheet_list)) {
         Spritesheet *sheet = iter.ref;
         for (dyna_foreach(Sprite, kter, sheet->sprites)) {
             Sprite *sprite = kter.ref;
@@ -283,20 +256,18 @@ int write_project_file(Ctx *ctx, const strview_t path) {
 }
 
 int write_current_project_file(Ctx *ctx) {
-    if (!ctx->project.loaded || !strview_is_valid(strbuf_view2(ctx->project.path))) {
-        // @note. Should be probably kick the user back to the welcome screen?
+    if (!ctx->project_loaded || !strview_is_valid(strbuf_view2(ctx->p->path_absolute))) {
+        // @note. Should we probably kick the user back to the welcome screen?
         printfd("ERR: Can't save current project, no file opened.");
         return -1;
     }
-    return write_project_file(ctx, strbuf_view2(ctx->project.path));
+    return write_project_file(ctx, strbuf_view2(ctx->p->path_absolute));
 }
 
 int create_new_project(Ctx *ctx) {
-
-    static const strview_t extension = cstr_SL_const(".spri.txt");
-    static const char *file_patterns[] = { "*.spri.txt" };
-    const char *path_result = tinyfd_saveFileDialog(
-        "Save new project as", NULL, 1, file_patterns, extension.data);
+    static const strview_t extension = cstr_SL_const(EXTENSION);
+    static const char *file_patterns[] = { "*"EXTENSION };
+    const char *path_result = tinyfd_saveFileDialog("Save new project as", NULL, 1, file_patterns, extension.data);
     if (path_result == NULL) { return 0; }
 
     Arena *arena = &ctx->frame_arena;
@@ -306,40 +277,29 @@ int create_new_project(Ctx *ctx) {
         strbuf_append_strview(&new_file_path, extension);
     }
     if (!strview_ends_with(strbuf_view2(new_file_path), extension)) { return -1; }
-
     if (FileExists(new_file_path->cstr)) {
         printfd("File already exists. Refusing to overwrite existing project.");
         return -1;
     }
 
-    // Reset state.
-
-    clear_existing_project(ctx);
-
-    // Set current opened project.
-
-    strbuf_assign(&ctx->project.path, strbuf_view2(new_file_path));
+    // Write.
     int err = write_project_file(ctx, strbuf_view2(new_file_path));
-    if (err != 0) {
-        printfd("ERR: Failed to create project.");
-        return -1;
-    }
+    if (err != 0) { printfd("ERR: Failed to create project."); return -1; }
 
-    // Officially we have an open project to work with.
-
-    ctx->project.loaded = true;
-    strbuf_assign(&ctx->project.path, strbuf_view2(new_file_path));
+    // Setup new project.
+    ctx_clear_curr_project(ctx);
+    ctx->project_loaded = true;
+    strbuf_assign(&ctx->p->path_absolute, strbuf_view2(new_file_path));
     printfd("Saved new project file ["PRIstrw"]", PRIstrargbuf(new_file_path));
-
     return 0;
 }
 
 int open_existing_project(Ctx *ctx) {
-    static const strview_t extension = cstr_SL_const(".spri.txt");
-    static const char *file_patterns[] = { "*.spri.txt" };
-    const char *path_result = tinyfd_openFileDialog(
-        "Open Existing Project", NULL, 1, file_patterns, "WoySpriteMeta files (.spri.txt)", false);
+    static const strview_t extension = cstr_SL_const(EXTENSION);
+    static const char *file_patterns[] = { "*"EXTENSION };
+    const char *path_result = tinyfd_openFileDialog("Open Existing Project", NULL, 1, file_patterns, "WoySpriteMeta files ("EXTENSION")", false);
     if (path_result == NULL) { return 0; }
+
     Arena *arena = &ctx->frame_arena;
     strbuf_t *file_path = strbuf_create_with_arena(cstr(path_result), arena);
 
@@ -347,7 +307,6 @@ int open_existing_project(Ctx *ctx) {
         printfd("ERR: Wrong file extension, refusing to read file.");
         return -1;
     }
-
     return load_project_file(ctx, strbuf_view2(file_path));
 }
 
@@ -370,11 +329,11 @@ void editor_reset_selection(Ctx *ctx) {
 
 /// @Returns NULL of not found.
 Spritesheet *get_current_spritesheet(Ctx *ctx) {
-    return Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_sheet_id);
+    return Vec_Spritesheet_get_safe(&ctx->p->spritesheet_list, ctx->curr_sheet_id);
 }
 
 void select_spritesheet_frame(Ctx *ctx, int sheet_id, int frame_id) {
-    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->p->spritesheet_list, sheet_id);
     if (sheet == NULL) { return; }
     SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, frame_id);
     if (frame == NULL) { return; }
@@ -390,19 +349,42 @@ void select_spritesheet_frame(Ctx *ctx, int sheet_id, int frame_id) {
 }
 
 SpritesheetFrame *get_selected_spritesheet_frame(Ctx *ctx) {
-    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->curr_sheet_id);
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->p->spritesheet_list, ctx->curr_sheet_id);
     if (sheet == NULL) { return NULL; }
     return Vec_SpritesheetFrame_get_safe(&sheet->frames, ctx->curr_frame_id);
 }
 
 
-int open_image_as_spritesheet(Ctx *ctx, const strview_t path) {
+int open_image_as_spritesheet(Project *p, const strview_t path, Arena scratch) {
 
     // If spritesheet already exists then free it and rebuild.
 
     int sheet_id;
-    Spritesheet *new_sheet = spritesheet_get_if_exists(ctx, path, &sheet_id);
+    Spritesheet *new_sheet = spritesheet_get_if_exists(p, path, &sheet_id);
     if (new_sheet != NULL) { Spritesheet_clear_frames(new_sheet); }
+
+    // Get relative path.
+
+    strbuf_t *project_dir = strbuf_create_with_arena(strbuf_view2(p->path_absolute), &scratch);
+    size_t project_dir_size;
+    cwk_path_get_dirname(project_dir->cstr, &project_dir_size);
+    strbuf_update_cstr_size(&project_dir, (int)project_dir_size);
+    printfd("project_dir -> "PRIstrw, PRIstrargbuf(project_dir));
+    if (!IsPathDirectory(project_dir->cstr)) {
+        printfd("ERR: Not a directory.");
+        return -1;
+    }
+
+    strbuf_t *sheet_path = strbuf_create_with_arena(path, &scratch);
+    size_t required_size = cwk_path_get_relative(project_dir->cstr, sheet_path->cstr, NULL, 0);
+    strbuf_t *relative_path = strbuf_create_with_arena(required_size, &scratch);
+    cwk_path_get_relative(p->path_absolute->cstr, sheet_path->cstr, relative_path->cstr, required_size);
+    strbuf_update_cstr_size(&relative_path, (int)required_size);
+    printfd(ANSI_MAG"Path from "PRIstrw" to "PRIstrw" got relative path: "PRIstrw,
+            PRIstrargbuf(p->path_absolute),
+            PRIstrarg(path),
+            PRIstrargbuf(relative_path)
+        );
 
     // Load from path.
 
@@ -411,8 +393,8 @@ int open_image_as_spritesheet(Ctx *ctx, const strview_t path) {
     if (err != 0) { return -1; }
     if (new_sheet == NULL) {
         Spritesheet _new_sheet = Spritesheet_make();
-        sheet_id = Vec_Spritesheet_append(&ctx->spritesheet_list, _new_sheet);
-        new_sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, sheet_id);
+        sheet_id = Vec_Spritesheet_append(&p->spritesheet_list, _new_sheet);
+        new_sheet = Vec_Spritesheet_get_safe(&p->spritesheet_list, sheet_id);
         if (new_sheet == NULL) { return -1; }
     }
     Vec_SpritesheetFrame_append(&new_sheet->frames, frame);
@@ -423,7 +405,7 @@ int open_image_as_spritesheet(Ctx *ctx, const strview_t path) {
     strview_t extension = { 0 };
 
     {
-        strbuf_t *base_cstr = strbuf_create_with_arena(base, &ctx->frame_arena);
+        strbuf_t *base_cstr = strbuf_create_with_arena(base, &scratch);
         if (cwk_path_has_extension(base_cstr->cstr)) {
             size_t size;
             cwk_path_get_extension(base_cstr->cstr, &extension.data, &size);
@@ -441,7 +423,7 @@ int open_image_as_spritesheet(Ctx *ctx, const strview_t path) {
         printfd("Basename [%"PRIstr"] Extension [%"PRIstr"]", PRIstrarg(base), PRIstrarg(extension));
         printfd("basename_digit_str [%"PRIstr"] basename_digit [%d]", PRIstrarg(digit_str), digit);
     }
-    if (digit == -1) { goto commit; }
+    if (digit == -1) { goto quit_commit; }
     base.size -= digit_str.size;
 
     // Traverse frame files.
@@ -454,9 +436,8 @@ int open_image_as_spritesheet(Ctx *ctx, const strview_t path) {
     }
 
     {
-        Arena arena = ctx->frame_arena;
+        Arena arena = scratch;
         strbuf_t *possible_file_path = strbuf_create_with_arena(0, &arena);
-
         for (;;) {
             ++digit;
             strbuf_printf(&possible_file_path, PRIstrw"%d"PRIstrw, PRIstrarg(base), digit, PRIstrarg(extension));
@@ -466,12 +447,7 @@ int open_image_as_spritesheet(Ctx *ctx, const strview_t path) {
         }
     }
 
-    // Finally commit.
-
-    commit:
-    {
-        select_spritesheet_frame(ctx, sheet_id, 0); // TODO: Auto select this new one.
-    }
+    quit_commit:
     return 0;
 }
 
@@ -481,48 +457,14 @@ int open_image_as_spritesheet_file_dialog(Ctx *ctx) {
     const char *path_result_cstr = tinyfd_openFileDialog("Open image file", NULL, 1, file_patterns, ".png", 0);
     if (path_result_cstr == NULL) { return -1; }
     strview_t path = cstr(path_result_cstr);
-    return open_image_as_spritesheet(ctx, path);
+    int err = open_image_as_spritesheet(ctx->p, path, ctx->frame_arena);
+    select_spritesheet_frame(ctx, 0, 0);
+    return err;
 }
 
 void call_action(Ctx *ctx, Action *action) {
     printfd("[%"PRIstr"]", PRIstrarg(strbuf_view2(action->name)));
     (*action->op_ptr)(ctx);
-}
-
-/// @Returns Font. Can fail, check with IsFontValid(...).
-Font load_font_with_buncha_codepoints(const char* font_path, int font_size) {
-
-    // Ranges are inclusive.
-    int ranges[] = {
-        0xFFFD,  0xFFFD,  // (�) codepoint
-        32,      127,     // Basic latin
-        0x00A1,  0x00FF,  // C1 Controls and Latin-1 Supplement
-        0x0100,  0x017F,  // Latin Extended-A
-        0x0180,  0x024F,  // Latin Extended-B
-        0x1F300, 0x1F5FF, // Miscellaneous Symbols and Pictographs
-        0x1F600, 0x1F64F, // Emoticons
-    };
-
-    int range_amount = (int)(sizeof(ranges)/sizeof(ranges[0]));
-    int total_codepoints = 0;
-    for (int i = 0; i < range_amount; i += 2) {
-        total_codepoints += ranges[i+1] - ranges[i] +1; // Inclusive
-    }
-
-    int *codepoints = (int*)malloc((size_t)total_codepoints * sizeof(int));
-    int codepoint_count = 0;
-
-    for (int i = 0; i < range_amount; i += 2) {
-        for (int j = ranges[i]; j <= ranges[i+1]; ++j) {
-            codepoints[codepoint_count] = j;
-            ++codepoint_count;
-        }
-    }
-
-    wassert(codepoint_count == total_codepoints);
-    Font font = LoadFontEx(font_path, (int)font_size, codepoints, (int)codepoint_count);
-    free(codepoints);
-    return font;
 }
 
 void register_sprite(Ctx *ctx, Rect2i rect) {
@@ -662,13 +604,13 @@ void spritesheet_try_set_cursor_mode(Ctx *ctx, SHEETEDITOR_CURSOR new_mode) {
     }
 
     // Reset state
-    ctx->editor.cursor              = new_mode;
-    ctx->editor.selection_origin    = (V2i) { 0 };
-    ctx->editor.mouse_is_selecting  = false;
-    ctx->editor.selection           = (Rect2i) { 0 };
-    ctx->editor.drag_origin         = (V2i) { 0 };
-    ctx->editor.drag_prev_mouse_pos = (V2i) { 0 };
-    ctx->editor.add_can_undo        = false;
+    ZERO(ctx->editor.selection_origin);
+    ZERO(ctx->editor.mouse_is_selecting);
+    ZERO(ctx->editor.selection);
+    ZERO(ctx->editor.drag_origin);
+    ZERO(ctx->editor.drag_prev_mouse_pos);
+    ZERO(ctx->editor.add_can_undo);
+    ctx->editor.cursor = new_mode;
 
     // Setup new mode.
     switch (ctx->editor.cursor) {
@@ -904,7 +846,7 @@ void editor_process_delete(Ctx *ctx) {
 
 
 int action_spritesheet_delete(Ctx *ctx) {
-    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->mouse_selected_spritesheet_id);
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->p->spritesheet_list, ctx->mouse_selected_spritesheet_id);
     if (sheet == NULL) { return -1; }
     int confirm_delete = tinyfd_messageBox("DELETE?", "Delete spritesheet and it’s frames?", "yesno", "warning", 0);
     if (confirm_delete == 0) { return 0; }
@@ -919,19 +861,19 @@ int action_spritesheet_delete(Ctx *ctx) {
 
 
 int action_spritesheet_reload(Ctx *ctx) {
-    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->mouse_selected_spritesheet_id);
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->p->spritesheet_list, ctx->mouse_selected_spritesheet_id);
     if (sheet == NULL) { return -1; }
     SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, 0);
     printfd("Why would it be not valid? "PRIstrw, PRIstrarg(strbuf_view2(frame->path)));
     if (frame == NULL && !strview_is_valid(strbuf_view2(frame->path))) { return -1; }
     strbuf_t *path = strbuf_create_with_arena(strbuf_view2(frame->path), &ctx->frame_arena);
     ctx->mouse_selected_spritesheet_id = -1;
-    return open_image_as_spritesheet(ctx, strbuf_view2(path));
+    return open_image_as_spritesheet(ctx->p, strbuf_view2(path), ctx->frame_arena);
 }
 
 
 int action_spritesheet_toggle_fold(Ctx *ctx) {
-    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->spritesheet_list, ctx->mouse_selected_spritesheet_id);
+    Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->p->spritesheet_list, ctx->mouse_selected_spritesheet_id);
     if (sheet == NULL) { return -1; }
     sheet->unfolded = !sheet->unfolded;
     ctx->mouse_selected_spritesheet_id = -1;

@@ -6,6 +6,8 @@
 #include "zoompanel.h"
 #include "arena.h"
 
+#define EXTENSION ".spri.txt"
+
 typedef struct Ctx Ctx;
 
 typedef struct Action {
@@ -17,10 +19,6 @@ typedef struct ActionLiteral {
     strview_t name;
     int (*op_ptr)(Ctx *ctx); /* @Returns Error. */
 } ActionLiteral;
-
-typedef struct strbuf_wrap {
-    strbuf_t *str;
-} strbuf_wrap;
 
 typedef struct SpritesheetFrame {
     strbuf_t *path;
@@ -41,22 +39,12 @@ typedef struct Sprite {
         };
         Rect2i rect;
     };
-
-    int frames; /* Calculated by detecting empty sprite. */
+    int frames;
     strbuf_t *name;
 } Sprite;
 
 #define DYNA__TYPE Action
-#include "da.h"
-
-#define DYNA__TYPE Action
 #define DYNA__NAMESPACE Vec_Action
-#include "da.h"
-
-#define DYNA__TYPE strbuf_wrap
-#include "da.h"
-
-#define DYNA__TYPE Sprite
 #include "da.h"
 
 #define DYNA__TYPE Sprite
@@ -83,6 +71,7 @@ typedef struct Draw {
     int char_spacing;
     int line_spacing;
     Font font;
+    Texture splash_art;
 } Draw;
 
 typedef enum SHEETEDITOR_CURSOR {
@@ -94,24 +83,34 @@ typedef enum SHEETEDITOR_CURSOR {
 } SHEETEDITOR_CURSOR;
 #define SHEETEDITOR_CURSOR_DEFAULT SHEETEDITOR_CURSOR_TWEAK
 
+
+typedef struct Project {
+    strbuf_t *path_absolute;
+    Vec_Spritesheet spritesheet_list;
+} Project;
+
+
 typedef struct Ctx {
+
     Draw draw;
     int ticks; // Frame counter since engine start.
 
-    // [SPRITESHEET]
-    Vec_Spritesheet spritesheet_list; // A spritesheet vector with N items represents a spritesheet with N frames.
-    int curr_sheet_id;    // Spritesheet collection.
-    int curr_frame_id;    // frame.
+    bool project_loaded;
+    bool has_unsaved_changes;
+    int curr_sheet_id;
+    int curr_frame_id;
     Rect2i curr_sheet_size;
     int mouse_selected_spritesheet_id;
-    // ![SPRITESHEET]
 
-    Texture splash_art;
-    struct {
-        bool loaded;
-        strbuf_t *path;
-        bool unsaved_changes;
-    } project;
+    // [ Arenas ]
+    ArenaRoot frame_arena_root;
+    Arena frame_arena;
+    // [ !Arenas ]
+
+    union {
+        Project *project;
+        Project *p;
+    };
 
     // Floating menu.
     struct {
@@ -121,8 +120,8 @@ typedef struct Ctx {
     } menu;
 
     // Sheeteditor widget.
-    Zoompanel zoompanel;
     struct {
+        Zoompanel zoompanel;
         int_Dyna selected_sprites;
         int_Dyna selected_sprites_cursor;
 
@@ -140,13 +139,6 @@ typedef struct Ctx {
         // [ @!Group ]
     } editor;
 
-    // [ Arenas ]
-    ArenaRoot frame_arena_root;
-    Arena frame_arena;
-    // [ !Arenas ]
 } Ctx;
-
-#define MAKEVIEW__TYPE Rect2i
-#include "make_view.h"
 
 #endif // !STATE_H

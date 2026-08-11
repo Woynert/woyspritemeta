@@ -318,7 +318,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
     bool mouse_focus = mice_in_rect(area);
     {
         int item_amount = 1;
-        for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+        for (dyna_foreach(Spritesheet, kter, ctx->p->spritesheet_list)) {
             item_amount += kter.ref->frames.size;
         }
 
@@ -329,7 +329,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
     }
 
     int i = -1;
-    for (dyna_foreach(Spritesheet, kter, ctx->spritesheet_list)) {
+    for (dyna_foreach(Spritesheet, kter, ctx->p->spritesheet_list)) {
         Spritesheet *sheet = kter.ref;
     for (dyna_foreach(SpritesheetFrame, iter, sheet->frames)) {
         SpritesheetFrame *frame = iter.ref;
@@ -638,7 +638,7 @@ void ui_widget_spritesheet_cursors(Ctx *ctx, uitree_DrawInfo info) {
     b_DrawRectangle(Rect2i_add_padding_all(btn_area, 1), bg_color);
     b_ui_draw_text(ctx, cstr_SL("Reset\nZoom"), btn_area.pos, DEFAULT_FG);
     if (pressed) {
-        zoompanel_reset_zoom_and_pan(&ctx->zoompanel);
+        zoompanel_reset_zoom_and_pan(&ctx->editor.zoompanel);
     }
     btn_area.y += btn_area.height;
 }
@@ -665,10 +665,10 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 
     V2i texture_size = v2i(texture.width, texture.height);
 
-    zoompanel_process(&ctx->zoompanel, texture_size, area);
+    zoompanel_process(&ctx->editor.zoompanel, texture_size, area);
 
-    V2i panned_origin = v2i_add(area.pos, ctx->zoompanel.offset_from_origin);
-    V2i scaled_size = v2f_2i(v2f_mul(v2i_2f(texture_size), v2ff(ctx->zoompanel.zoom)));
+    V2i panned_origin = v2i_add(area.pos, ctx->editor.zoompanel.offset_from_origin);
+    V2i scaled_size = v2f_2i(v2f_mul(v2i_2f(texture_size), v2ff(ctx->editor.zoompanel.zoom)));
     Rect2i final = (Rect2i){
         .pos = panned_origin,
         .size = scaled_size,
@@ -676,7 +676,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 
     // Get cursor position
 
-    float scale = ctx->zoompanel.zoom;
+    float scale = ctx->editor.zoompanel.zoom;
     V2i mouse_from_image_origin = v2i_sub(mouse, panned_origin);
     ctx->editor.mouse_pos = v2f_2i(v2f_mul(
         v2f_div(v2i_2f(mouse_from_image_origin), v2i_2f(scaled_size)),
@@ -687,7 +687,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
     b_BeginScissorMode(area);
     b_DrawRectangle(area, DARKGRAY);
     b_DrawRectangle(final, CHECKBOARD_BG);
-    b_DrawCheckerboard(final, CHECKBOARD_FG, (int)(((float)16 * ctx->zoompanel.zoom)));
+    b_DrawCheckerboard(final, CHECKBOARD_FG, (int)(((float)16 * ctx->editor.zoompanel.zoom)));
     b_DrawTextureScaled(texture, final);
 
     {
@@ -747,7 +747,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 void ui_widget_spritesheet_hints(Ctx *ctx, uitree_DrawInfo info) {
     const Rect2i area = info.area;
 
-    if (ctx->spritesheet_list.size <= 0) { return; }
+    if (ctx->p->spritesheet_list.size <= 0) { return; }
 
     strview_t text = STRVIEW_INVALID;
 
@@ -853,11 +853,11 @@ void ui_widget_welcome_screen(Ctx *ctx, uitree_DrawInfo info) {
         Rect2i splashart_area = area;
         splashart_area.height = 64;
         splashart_area.width = 64;
-        V2i texture_size = {{ ctx->splash_art.width, ctx->splash_art.height }};
-        Rect2i texture_area = b_draw_texture_pixel_perfect(ctx->splash_art, (Rect2i){.size=texture_size,}, splashart_area);
+        V2i texture_size = {{ ctx->draw.splash_art.width, ctx->draw.splash_art.height }};
+        Rect2i texture_area = b_draw_texture_pixel_perfect(ctx->draw.splash_art, (Rect2i){.size=texture_size,}, splashart_area);
         b_DrawRectangle(splashart_area, CHECKBOARD_BG);
         b_DrawCheckerboard(splashart_area, CHECKBOARD_FG, (int)(((float)texture_area.width / (float)texture_size.x) * 8.f));
-        b_draw_texture_pixel_perfect(ctx->splash_art, (Rect2i){.size=texture_size,}, splashart_area);
+        b_draw_texture_pixel_perfect(ctx->draw.splash_art, (Rect2i){.size=texture_size,}, splashart_area);
         b_DrawRectangleLines(splashart_area, BLACK, 1);
         line_area.y += splashart_area.height;
     }
@@ -1029,7 +1029,7 @@ void ui_draw_welcome_screen(Ctx *ctx) {
 }
 
 void ui_draw_all(Ctx *ctx) {
-    if (ctx->project.loaded) {
+    if (ctx->project_loaded) {
         ui_draw_workspace(ctx);
     } else {
         ui_draw_welcome_screen(ctx);

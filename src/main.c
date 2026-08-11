@@ -34,9 +34,8 @@ void glfw_key_callback(GLFWwindow* w, int key, int scancode, int action, int mod
     raylib_key_callback(w, key, scancode, action, mods);
 }
 
-void hook_glfw_callbacks(Ctx *ctx) {
+void hook_glfw_callbacks(void) {
     GLFWwindow* window = (GLFWwindow*)GetWindowHandle();
-    glfwSetWindowUserPointer(window, ctx);
     raylib_mouse_callback = glfwSetMouseButtonCallback(window, glfw_mouse_callback);
     raylib_scroll_callback = glfwSetScrollCallback(window, glfw_scroll_callback);
     raylib_key_callback = glfwSetKeyCallback(window, glfw_key_callback);
@@ -55,7 +54,7 @@ int main(void) {
     printfd("HI!");
 
     Ctx ctx = { 0 };
-    init_ctx(&ctx);
+    ctx_init(&ctx);
 
     int init_win_w = 1300;
     int init_win_h = 800;
@@ -69,7 +68,7 @@ int main(void) {
     SetExitKey(KEY_NULL);
 
     drawbuf_init();
-    hook_glfw_callbacks(&ctx);
+    hook_glfw_callbacks();
     ctx_load_assets(&ctx);
 
     while(!WindowShouldClose())
@@ -104,7 +103,7 @@ int main(void) {
         EndDrawing();
     }
 
-    free_ctx(&ctx);
+    ctx_free(&ctx);
     CloseWindow();
     drawbuf_deinit();
 

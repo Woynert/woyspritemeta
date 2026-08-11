@@ -8,6 +8,8 @@
 #include "stdio.h"
 #include "strbuf_extra.h"
 #include "la.h"
+#include <sys/stat.h>
+#include <sys/types.h>
 
 
 typedef union Rect2 {
@@ -474,6 +476,12 @@ Rect2i Rect2i_stay_centered_and_contained(Rect2i r, Rect2i cont) {
     return r;
 }
 
+bool IsPathDirectory(const char *path) {
+    struct stat path_stat;
+    if (stat(path, &path_stat) != 0) { return false; }
+    return path_stat.st_mode & __S_IFDIR;
+}
+
 /*
    // Usage example:
    Rect2i chunks[3];
@@ -534,5 +542,30 @@ Rect2i_pair Rect2i_split_horizontally_px(Rect2i src, int offset_px) {
 */
 
 
+/// @Note: Ranges are inclusive.
+/// @Returns Font. Can fail, check with IsFontValid(...).
+Font load_font_with_buncha_codepoints(const char* font_path, int font_size,
+        int *ranges, int ranges_size
+) {
+    int total_codepoints = 0;
+    for (int i = 0; i < ranges_size; i += 2) {
+        total_codepoints += ranges[i+1] - ranges[i] +1; // Inclusive
+    }
+
+    int *codepoints = (int*)malloc((size_t)total_codepoints * sizeof(int));
+    int codepoint_count = 0;
+
+    for (int i = 0; i < ranges_size; i += 2) {
+        for (int j = ranges[i]; j <= ranges[i+1]; ++j) {
+            codepoints[codepoint_count] = j;
+            ++codepoint_count;
+        }
+    }
+
+    wassert(codepoint_count == total_codepoints);
+    Font font = LoadFontEx(font_path, (int)font_size, codepoints, (int)codepoint_count);
+    free(codepoints);
+    return font;
+}
 
 #endif // !RAYLIB_EXTRA
