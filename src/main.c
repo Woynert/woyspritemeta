@@ -82,7 +82,10 @@ int main(void) {
 
         BeginDrawing();
         ClearBackground(BLACK);
-        
+        DrawRectangleLinesi(
+            (Rect2i){{.width=GetScreenWidth(),.height= GetScreenHeight()}},
+            WINDOW_BORDER_COLOR, 1);
+
         // Reset arena.
         ctx.frame_arena = ArenaRoot_get_arena(ctx.frame_arena_root);
 
@@ -91,11 +94,20 @@ int main(void) {
         editor_process_cursor_logic(&ctx);
         editor_process_delete(&ctx);
 
-        quickmonitor_draw();
-        quickmonitor_line("fps %d", GetFPS());
-        ptrdiff_t used = (ptrdiff_t)(ctx.frame_arena.beg - ctx.frame_arena_root.buf);
-        ptrdiff_t total = (ptrdiff_t)(ctx.frame_arena_root.cap);
-        quickmonitor_line("frame_arena %td/%td (%.3f%%)", used, total, ((float)used/(float)total)*100.0);
+        {
+            // TODO: Make it so we can add lines from anywhere.
+            static bool show_quickmonitor = false;
+            if (IsKeyPressed(KEY_F3)) {
+                show_quickmonitor = !show_quickmonitor;
+            }
+            if (show_quickmonitor) {
+                quickmonitor_draw();
+                quickmonitor_line("fps %d", GetFPS());
+                ptrdiff_t used = (ptrdiff_t)(ctx.frame_arena.beg - ctx.frame_arena_root.buf);
+                ptrdiff_t total = (ptrdiff_t)(ctx.frame_arena_root.cap);
+                quickmonitor_line("frame_arena %td/%td (%.3f%%)", used, total, ((float)used/(float)total)*100.0);
+            }
+        }
 
         winput_consume_all();
         kinput_frame_end();

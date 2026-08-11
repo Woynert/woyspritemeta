@@ -26,70 +26,73 @@ typedef struct widget_vsplit_state_t {
     float *size;
     int *is_percentage_or_px;
     int *is_dragging;
+    int *pad;                // px
+    int *gap;                // px
     Rect2i *drag_area;
 } widget_vsplit_state_t;
 
 widget_vsplit_state_t widget_vsplit_get_state(uitree_WidgetState *state) {
     return (widget_vsplit_state_t) {
         .size                = &state->float_a,
-        .is_percentage_or_px = &state->int_b,
-        .is_dragging         = &state->int_c,
+        .is_percentage_or_px = &state->int_a,
+        .is_dragging         = &state->int_b,
+        .pad                 = &state->int_c,
+        .gap                 = &state->int_d,
         .drag_area           = &state->rect_a,
     };
 }
 
-void widget_vsplit_set_user_default_state(Uitree *tree, uitree_Node *node, int size, bool is_percentage_or_px) {
-    const float PAD = 2;
+void widget_vsplit_set_user_default_state(Uitree *tree, uitree_Node *node, int size, bool is_percentage_or_px, int gap_px, int pad_px) {
     uitree_WidgetState *state = arena_new(&tree->arena, uitree_WidgetState, 1);
     if (state == NULL) { return; }
     widget_vsplit_state_t vars = widget_vsplit_get_state(state);
 
+    *vars.pad = pad_px;
+    *vars.gap = gap_px;
     *vars.is_percentage_or_px = is_percentage_or_px;
     if (is_percentage_or_px == 0) {
         *vars.size = (float)(size - 50) / 100.f; // %
     } else {
-        *vars.size = (float)size + PAD;          // px
+        *vars.size = (float)size + (float)gap_px; // px
     }
     node->user_default_state = state;
 }
 
 void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ctx, uitree_WidgetState *state) {
-    const int PAD = 2;
+    (void)user_ctx;
     const widget_vsplit_state_t vars = widget_vsplit_get_state(state);
     int first_child_height;
 
+    area = Rect2i_add_padding_all(area, *vars.pad);
+
     // Determines whether the sizes are percentages (relative) or pixels (absolute).
     if (*vars.is_percentage_or_px == 0) {
-        //float percentage = (float)(*vars.size + 50) / 100.f;
         first_child_height = (int)((float)area.height * (*vars.size + 0.5f));
     } else {
         first_child_height = (int)*vars.size;
     }
-    (void)user_ctx;
 
     if (child_count > 0) {
         Rect2i *child = &children[0];
         child->width = area.width;
         child->x = area.x;
-        child->height = first_child_height;
+        child->height = first_child_height - (*vars.gap/2);
         child->y = area.y;
     }
     if (child_count > 1) {
         Rect2i *child = &children[1];
         child->width = area.width;
         child->x = area.x;
-        child->height = area.height - children[0].height;
-        child->y = area.y + children[0].height;
+        child->height = area.height - children[0].height - *vars.gap;
+        child->y = area.y + children[0].height + *vars.gap;
     }
-    children[0] = Rect2i_add_padding_all(children[0], PAD);
-    children[1] = Rect2i_add_padding_all(children[1], PAD);
 
     // This rect will be used for dragging.
     state->rect_a = (Rect2i) {
         .x      = children[0].x,
         .width  = children[0].width,
         .y      = children[0].y + children[0].height,
-        .height = PAD * 2,
+        .height = *vars.gap,
     };
 
     if (child_count > 2) { printfd("WAR: Too many children."); }

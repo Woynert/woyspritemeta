@@ -15,9 +15,13 @@
 #define DEFAULT_BG LIGHTGRAY
 #define DEFAULT_FG BLACK
 #define GRAY_FG    CLITERAL(Color){ 100, 100, 100, 255 }
+#define WINDOW_BORDER_COLOR CLITERAL(Color){ 50, 50, 50, 255 }
+#define CON_BORDER_COLOR MAGENTA
 #define ANIMATION_TICKS_PER_FRAME 15
 #define CHECKBOARD_BG (Color){ 200, 200, 200, 255 }
 #define CHECKBOARD_FG (Color){ 0, 0, 0, 20 }
+#define HANDLE_PX 5
+#define CON_PAD 2
 
 
 #define WIDGET__TABLE \
@@ -31,7 +35,8 @@ X( UI_WIDGET_WELCOME_SCREEN       , ui_widget_welcome_screen       ) \
 X( UI_WIDGET_SPRITESHEET_HINTS    , ui_widget_spritesheet_hints    ) \
 X( UI_WIDGET_VSPLIT_DRAG          , ui_widget_vsplit_drag          ) \
 X( UI_WIDGET_3HSPLIT_DRAG         , ui_widget_3hsplit_drag         ) \
-X( UI_WIDGET_FLOATING_MENU        , ui_widget_floating_menu        )
+X( UI_WIDGET_FLOATING_MENU        , ui_widget_floating_menu        ) \
+X( UI_WIDGET_STATUS_BAR           , ui_widget_status_bar           )
 
 
 enum UI_WIDGET {
@@ -283,7 +288,7 @@ void ui_widget_options(Ctx *ctx, uitree_DrawInfo info) {
             ui_setup_floating_menu(ctx, menu, countof(menu), v2i(btn_area.x, btn_area.y + btn_area.height));
         }
     }
-    b_DrawRectangleLines(btn_area, MAGENTA, 1);
+    b_DrawRectangleLines(btn_area, CON_BORDER_COLOR, 1);
     b_ui_draw_text(ctx, cstr_SL("Options"), (V2i){{ area.pos.x + PAD, area.pos.y }}, DEFAULT_FG);
 }
 
@@ -388,7 +393,7 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
     }
 
     b_EndScissorMode();
-    b_DrawRectangleLines(area_scroll_viewport, MAGENTA, 1);
+    b_DrawRectangleLines(area_scroll_viewport, CON_BORDER_COLOR, 1);
 }
 
 
@@ -482,12 +487,14 @@ void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
     }
     b_EndScissorMode();
 
-    b_DrawRectangleLines(area, MAGENTA, 1);
-    b_DrawRectangleLines(area_scroll_viewport, MAGENTA, 1);
+    b_DrawRectangleLines(area, CON_BORDER_COLOR, 1);
+    b_DrawRectangleLines(area_scroll_viewport, CON_BORDER_COLOR, 1);
 }
 
 
 void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
+
+    b_DrawRectangleLines(info.area, CON_BORDER_COLOR, 1);
 
     int *selected_sprite_ref = get_selected_sprite(ctx);
     if (selected_sprite_ref == NULL) { return; }
@@ -502,6 +509,7 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
 
     Rect2i area = info.area;
     b_DrawRectangle(area, DARKGRAY);
+    b_DrawRectangleLines(info.area, CON_BORDER_COLOR, 1);
 
     // Draw name controls.
     {
@@ -906,6 +914,24 @@ void ui_widget_welcome_screen(Ctx *ctx, uitree_DrawInfo info) {
 }
 
 
+void ui_widget_status_bar(Ctx *ctx, uitree_DrawInfo info) {
+
+    const Rect2i area = info.area;
+
+    b_DrawRectangle(area, DEFAULT_FG);
+
+    Arena scratch = ctx->frame_arena;
+    strbuf_t *str = strbuf_create_with_arena(0, &scratch);
+
+    strbuf_printf(&str,
+        "Current Project: "PRIstrw
+        ,
+        PRIstrargbuf(ctx->p->path_file)
+    );
+
+    b_ui_draw_text(ctx, strview(str), v2i(area.x + 10, area.y), DEFAULT_BG);
+}
+
 // ↓↓↓ Maps UI_WIDGET to function pointer.
 
 void (*widget_func[]) (Ctx *ctx, uitree_DrawInfo info) = {
@@ -929,51 +955,64 @@ void ui_draw_workspace(Ctx *ctx) {
     uitree_Node widget;
     uitree_Node con_tree = uitree_container_dumb(widget_stack);
 
+
     {
-        uitree_Node con_3split = uitree_container(t, cstr_SL("MainHSplit"),
-                widget_3hsplit, UI_WIDGET_3HSPLIT_DRAG);
-        widget_3hsplit_set_user_default_state(t, &con_3split, 20, 80);
+        uitree_Node con_vsplit_status_bar = uitree_container_dumb(widget_vsplit);
+        widget_vsplit_set_user_default_state(t, &con_vsplit_status_bar, GetScreenHeight() - ctx->draw.line_height, true, 0, 1);
 
         {
-            {
-                uitree_Node con_vsplit = uitree_container_dumb(widget_vsplit);
-                widget_vsplit_set_user_default_state(t, &con_vsplit, ctx->draw.line_height, true);
+            uitree_Node con_3split_editor = uitree_container(t, cstr_SL("MainHSplit"),
+                    widget_3hsplit, UI_WIDGET_3HSPLIT_DRAG);
+            widget_3hsplit_set_user_default_state(t, &con_3split_editor, 20, 80);
 
+            {
                 {
+                    uitree_Node con_vsplit_options = uitree_container_dumb(widget_vsplit);
+                    widget_vsplit_set_user_default_state(t, &con_vsplit_options, ctx->draw.line_height, true, CON_PAD, 0);
+
                     {
-                        uitree_Node con_stack = uitree_container_dumb(widget_stack);
-                        widget = uitree_widget_id(t, UI_WIDGET_OPTIONS, cstr_SL("options"));
-                        uitree_container_add_child(t, &con_stack, widget);
-                        uitree_container_add_child(t, &con_vsplit, con_stack);
+                        {
+                            uitree_Node con_stack = uitree_container_dumb(widget_stack);
+                            widget = uitree_widget_id(t, UI_WIDGET_OPTIONS, cstr_SL("options"));
+                            uitree_container_add_child(t, &con_stack, widget);
+                            uitree_container_add_child(t, &con_vsplit_options, con_stack);
+                        }
+
+                        widget = uitree_widget_id(t, UI_WIDGET_SPRITE_LIST, cstr_SL("WidgetSpriteList"));
+                        uitree_container_add_child(t, &con_vsplit_options, widget);
                     }
 
-                    widget = uitree_widget_id(t, UI_WIDGET_SPRITE_LIST, cstr_SL("WidgetSpriteList"));
-                    uitree_container_add_child(t, &con_vsplit, widget);
+                    uitree_container_add_child(t, &con_3split_editor, con_vsplit_options);
                 }
 
-                uitree_container_add_child(t, &con_3split, con_vsplit);
-            }
-
-            widget = ui_widget_spritesheet(t);
-            uitree_container_add_child(t, &con_3split, widget);
-
-            {
-                uitree_Node con_vsplit = uitree_container(t, cstr_SL("SecondVsplit"),
-                    widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
-                widget_vsplit_set_user_default_state(t, &con_vsplit, 80, false);
+                widget = ui_widget_spritesheet(t);
+                uitree_container_add_child(t, &con_3split_editor, widget);
 
                 {
-                    widget = uitree_widget_id(t, UI_WIDGET_SPRITESHEET_LIST, cstr_SL("SpriteSheetList"));
-                    uitree_container_add_child(t, &con_vsplit, widget);
+                    uitree_Node con_vsplit = uitree_container(t, cstr_SL("SecondVsplit"),
+                        widget_vsplit, UI_WIDGET_VSPLIT_DRAG);
+                    widget_vsplit_set_user_default_state(t, &con_vsplit, 80, false, HANDLE_PX, 0);
 
-                    widget = uitree_widget(UI_WIDGET_SPRITE_PREVIEW);
-                    uitree_container_add_child(t, &con_vsplit, widget);
+                    {
+                        widget = uitree_widget_id(t, UI_WIDGET_SPRITESHEET_LIST, cstr_SL("SpriteSheetList"));
+                        uitree_container_add_child(t, &con_vsplit, widget);
+
+                        widget = uitree_widget(UI_WIDGET_SPRITE_PREVIEW);
+                        uitree_container_add_child(t, &con_vsplit, widget);
+                    }
+
+                    uitree_container_add_child(t, &con_3split_editor, con_vsplit);
                 }
-
-                uitree_container_add_child(t, &con_3split, con_vsplit);
             }
+            uitree_container_add_child(t, &con_vsplit_status_bar, con_3split_editor);
         }
-        uitree_container_add_child(t, &con_tree, con_3split);
+
+        {
+            widget = uitree_widget(UI_WIDGET_STATUS_BAR);
+            uitree_container_add_child(t, &con_vsplit_status_bar, widget);
+        }
+
+        uitree_container_add_child(t, &con_tree, con_vsplit_status_bar);
     }
 
     {
