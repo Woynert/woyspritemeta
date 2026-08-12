@@ -293,6 +293,7 @@ int create_new_project(Ctx *ctx) {
 
     // Write.
 
+    ctx_clear_curr_project(ctx);
     int err = write_project_file(ctx, strbuf_view2(new_file_path));
     if (err != 0) { printfd("ERR: Failed to create project."); return -1; }
     err = load_project_file(ctx, strview(new_file_path));
@@ -865,8 +866,7 @@ int action_spritesheet_reload(Ctx *ctx) {
     Spritesheet *sheet = Vec_Spritesheet_get_safe(&ctx->p->spritesheet_list, ctx->mouse_selected_spritesheet_id);
     if (sheet == NULL) { return -1; }
     SpritesheetFrame *frame = Vec_SpritesheetFrame_get_safe(&sheet->frames, 0);
-    printfd("Why would it be not valid? "PRIstrw, PRIstrarg(strbuf_view2(frame->path)));
-    if (frame == NULL && !strview_is_valid(strbuf_view2(frame->path))) { return -1; }
+    if (frame == NULL || !strview_is_valid(strbuf_view2(frame->path))) { return -1; }
     strbuf_t *path = strbuf_create_with_arena(strbuf_view2(frame->path), &ctx->frame_arena);
     ctx->mouse_selected_spritesheet_id = -1;
     return open_image_as_spritesheet(ctx->p, strbuf_view2(path), ctx->frame_arena);

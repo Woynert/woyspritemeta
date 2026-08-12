@@ -270,9 +270,10 @@ void uitree_build_end(Uitree *t) {
         uitree__container_calculate_children_area(t, &arena, &t->root_node);
         uitree__List_Stack_append(&stack, (StackItem) { .node = &t->root_node, });
 
-        while (stack.size) {
+        while (stack.size > 0) {
             STACK_AREA_CONTINUE:
             item = uitree__List_Stack_get_tail(&stack);
+            if (!item) { break; }
             for (; item->child_idx < item->node->container.children.size; ++item->child_idx) {
                 uitree_Node *child = &item->node->container.children.items[item->child_idx];
                 if (child->is_container && child->container.children.size > 0) {
@@ -301,7 +302,7 @@ void uitree_build_end(Uitree *t) {
         while (stack.size) {
             STACK_ORDER_CONTINUE:
             item = uitree__List_Stack_get_tail(&stack);
-
+            if (!item) { break; }
             for (; item->child_idx < item->node->container.children.size; ++item->child_idx) {
                 uitree_Node *child = &item->node->container.children.items[item->node->container.children.size -1 -item->child_idx];
 

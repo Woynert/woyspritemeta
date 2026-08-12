@@ -19,7 +19,7 @@ add_project_link_arguments(['-rdynamic'], language:'c')
 # ↑↑↑ @Note: Should I disable it on release? This can improve logs...
 
 
-my_debug_args = [
+MY_WARNINGS = [
   '-Wall',
   '-Werror',
   '-Werror=incompatible-pointer-types',
@@ -100,7 +100,7 @@ gdbwui_exe = executable(
     tinyfd_dep,
     cwalk_dep,
   ]
-  ,c_args : my_debug_args
+  ,c_args : MY_WARNINGS
 )
 
 drawbuffer_lab = executable(
@@ -112,7 +112,7 @@ drawbuffer_lab = executable(
     raylib_dep,
     woycontainer_dep
   ]
-  ,c_args : my_debug_args
+  ,c_args : MY_WARNINGS
 )
 
 subdir('./src/standalone')

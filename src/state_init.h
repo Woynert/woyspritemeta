@@ -132,14 +132,12 @@ void ctx_clear_curr_project(Ctx *ctx) {
     if (ctx->p != NULL) {
         Project_clear(ctx->p);
     }
-
     ZERO(ctx->project_loaded);
     ZERO(ctx->has_unsaved_changes);
     ZERO(ctx->curr_frame_id);
     ZERO(ctx->curr_sheet_id);
     ZERO(ctx->curr_sheet_size);
     ctx->mouse_selected_spritesheet_id = -1;
-
     zoompanel_reset_zoom_and_pan(&ctx->editor.zoompanel);
 }
 

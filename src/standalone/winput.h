@@ -65,6 +65,7 @@ WinputFrame winput__state = { 0 };
 
 void winput_glfw_mouse_button_callback(GLFWwindow* w, int button, int action, int mods)
 {
+    (void)w; (void)mods;
     int local_button;
     if      (button == GLFW_MOUSE_BUTTON_LEFT)   { local_button = MouseLeft; }
     else if (button == GLFW_MOUSE_BUTTON_MIDDLE) { local_button = MouseMiddle; }
@@ -108,8 +109,9 @@ void winput_sync_frame(WinputFrame *frame) {
 }
 
 
-void winput_glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+void winput_glfw_scroll_callback(GLFWwindow* w, double xoffset, double yoffset)
 {
+    (void)w;
     winput__state.wheel_y = (float)yoffset;
     winput__state.wheel_x = (float)xoffset;
 }
@@ -134,6 +136,7 @@ void winput_consume_all(void) {
 
 
 void winput_consume(WinputFrame *frame, WinputMice button, bool trigger_release) {
+    (void)trigger_release;
     if (frame == NULL) { frame = &winput__state; }
     assert(button <= MouseMiddle);
     frame->button[button].pressed             = false;

@@ -4,7 +4,7 @@
 #include <assert.h>
 #include "strbuf.h"
 
-#define PRIstrargbuf(buf) PRIstrarg(strbuf_view2(buf))
+#define PRIstrargbuf(buf) (buf ? buf->size : 0),(buf ? buf->cstr : "")
 #define strview(buf) strbuf_view2(buf)
 
 static inline int _strbuf_int_min(int a, int b) { return a < b ? a : b; }

@@ -4,7 +4,7 @@ default:
 # ===== basic commands =====
 
 clean:
-	rm -rf build
+	rm -rf build build_release
 
 # https://mesonbuild.com/howtox.html#use-address-sanitizer
 # https://mesonbuild.com/Builtin-options.html#details-for-buildtype
@@ -13,7 +13,7 @@ clean:
 # '-Doptimization=g' Redundant because of '--buildtype=debug'
 mesonSetupDebug:
 	meson setup --reconfigure --prefix=$(CURDIR)/build build \
-		--buildtype=debug -Db_sanitize=address,undefined
+		--buildtype=debug -Doptimization=g -Db_sanitize=address,undefined
 
 mesonSetupRelease:
 	meson setup --reconfigure --prefix=$(CURDIR)/build_release build_release \
@@ -21,6 +21,9 @@ mesonSetupRelease:
 
 compile:
 	meson compile -C build
+
+compileRelease:
+	meson compile -C build_release
 
 run:
 	LSAN_OPTIONS=suppressions=suppr.txt ./build/sprite

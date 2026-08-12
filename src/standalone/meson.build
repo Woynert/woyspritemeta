@@ -7,7 +7,7 @@ strbuf_extra_test = executable(
     mickstr_dep,
     woycontainer_dep
   ]
-  ,c_args: my_extra_args
+  ,c_args: MY_WARNINGS
   ,build_by_default: false
 )
 test('strbuf_extra_test', strbuf_extra_test)
