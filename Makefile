@@ -6,16 +6,21 @@ default:
 clean:
 	rm -rf build
 
+# https://mesonbuild.com/howtox.html#use-address-sanitizer
+# https://mesonbuild.com/Builtin-options.html#details-for-buildtype
+# '--debug'          Redundant because of '--buildtype=debug'
+# '-Db_ndebug=false' Redundant because of '--buildtype=debug'
+# '-Doptimization=g' Redundant because of '--buildtype=debug'
 mesonSetupDebug:
 	meson setup --reconfigure --prefix=$(CURDIR)/build build \
-		--debug -Db_ndebug=false --buildtype=debug  -Doptimization=1
+		--buildtype=debug -Db_sanitize=address,undefined
+
+mesonSetupRelease:
+	meson setup --reconfigure --prefix=$(CURDIR)/build_release build_release \
+		--buildtype=release -Doptimization=2 -Db_ndebug=true
 
 compile:
 	meson compile -C build
-
-#generate: src/standalone/gdb_woy_api.h
-#src/standalone/gdb_woy_api.h: src/standalone/gdb_woy_api.py
-	#src/standalone/bin2header_struct.py -i src/standalone/gdb_woy_api.py -o src/standalone/gdb_woy_api.h -v PYTHON_CODE
 
 run:
 	LSAN_OPTIONS=suppressions=suppr.txt ./build/sprite

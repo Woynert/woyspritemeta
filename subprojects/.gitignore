@@ -11,10 +11,6 @@
 !/mickstr/meson.build
 !/mickstr/mickstr_implementation.c
 
-!/raygui/
-!/raygui/meson.build
-!/raygui/raygui_implementation.c
-
 !/raylib-fix-GetWindowHandler.patch
 
 !/tinyfd/

@@ -1,6 +1,25 @@
+
+# DEBUG NOTE: All of these debug options are set (albeit implicitely)
+# in the Makefile. Check "make mesonSetupDebug".
+#
+# Compiler args:
+#   -g
+#   -fsanitize=address,undefined
+#   -fno-omit-frame-pointer
+#   -Og
+# Linker args:
+#   -fsanitize=address,undefined
+#   -rdynamic   <-- NOT set by meson.
+
 project('raylib-game', 'c', default_options : ['c_std=gnu11'])
 
-my_extra_args = [
+
+# ↓↓↓ Includes function names for printing the stack.
+add_project_link_arguments(['-rdynamic'], language:'c')
+# ↑↑↑ @Note: Should I disable it on release? This can improve logs...
+
+
+my_debug_args = [
   '-Wall',
   '-Werror',
   '-Werror=incompatible-pointer-types',
@@ -26,23 +45,10 @@ my_extra_args = [
   '-Wno-error=stringop-truncation',
   '-Wno-unused-function',
 
-  # sanitizer
-  #'-fsanitize=address',
-  #'-lundef=false',
-
+  #'-lundef=false', ## <-- TODO: Find out what this flag does.
 ]
 
-add_project_arguments([
-  '-fsanitize=address,undefined',
-  '-fno-omit-frame-pointer',
-  '-g',
-  '-Og', # O1 supposedly better than O0 or O2.
-], language:'c')
-add_project_link_arguments([
-  '-fsanitize=address,undefined',
 
-  '-rdynamic', # Debug only, includes function names for printing the stack.
-], language:'c')
 
 # strbuf
 
@@ -72,10 +78,6 @@ raylib_opts.add_cmake_defines({'BUILD_EXAMPLES': false})
 raylib_proj = cmake.subproject('raylib', options: raylib_opts)
 raylib_dep = raylib_proj.dependency('raylib')
 
-#raygui_proj = subproject('raygui',
-  #default_options: [ 'default_library=static' ])
-#raygui_dep = raygui_proj.get_variable('raygui_dep')
-
 gl_dep = dependency('gl') # Only needed to shut up clang LSP.
 
 woycontainer_proj = subproject('woycontainer')
@@ -98,7 +100,7 @@ gdbwui_exe = executable(
     tinyfd_dep,
     cwalk_dep,
   ]
-  ,c_args : my_extra_args
+  ,c_args : my_debug_args
 )
 
 drawbuffer_lab = executable(
@@ -110,59 +112,7 @@ drawbuffer_lab = executable(
     raylib_dep,
     woycontainer_dep
   ]
-  ,c_args : my_extra_args
+  ,c_args : my_debug_args
 )
 
 subdir('./src/standalone')
-
-#scroll_exe = executable(
-  #'scroll'
-  #,'src/scroll.c'
-  #,dependencies : [
-    #mickstr_dep,
-    #math_dep
-  #]
-  #,c_args : my_extra_args
-#)
-
-#file_list_exe = executable(
-  #'file_list'
-  #,'src/demos/file_list.c'
-  #,include_directories : core_includes
-  #,dependencies : [
-    #raylib_dep,
-    #math_dep,
-    #raygui_dep,
-    #cwalk_dep,
-    #mickstr_dep
-  #]
-  #,c_args : my_extra_args
-#)
-
-#tree_exe = executable(
-  #'tree'
-  #,'src/demos/tree.c'
-  #,include_directories : core_includes
-  #,dependencies : [
-    #math_dep,
-    #mickstr_dep
-  #]
-  #,c_args : my_extra_args
-#)
-
-#test_map_exe = executable(
-  #'test_map'
-  #,'src/containers/map_test.c'
-  #,include_directories : core_includes
-  #,c_args : my_extra_args
-#)
-
-#ring_exe = executable(
-  #'ring'
-  #,'src/containers/fiforing_test.c'
-  #,dependencies : [
-    #math_dep,
-    #mickstr_dep
-  #]
-  #,c_args : my_extra_args
-#)

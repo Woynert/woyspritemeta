@@ -58,11 +58,6 @@ fetch_dependency(
 apply_patch("raylib", "./raylib-fix-GetWindowHandler.patch")
 
 fetch_dependency(
-"raygui/raygui",
-"https://github.com/raysan5/raygui",
-"b9971133b2f7b7513904770d565b683a93fb3624")
-
-fetch_dependency(
 "tinyfd/tinyfd",
 "http://git.code.sf.net/p/tinyfiledialogs/code",
 "58f4a241a9afb2996e2beefc938fc8d5002da601")
