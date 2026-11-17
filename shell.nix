@@ -5,13 +5,15 @@
 with import <nixpkgs> {};
 let
 
-pkg_config_wrap = writeShellScriptBin "pkg-config" ''
-  #!/usr/bin/env sh
-  ${pkg-config-unwrapped}/bin/pkg-config $@ 2> /dev/null
-  err=$?
-  [ $err -ne 0 ] && exec ${pkg-config}/bin/pkg-config $@
-  exit $err
-'';
+#pkg_config_wrap = writeShellScriptBin "pkg-config" ''
+  ##!/usr/bin/env sh
+  #${pkg-config-unwrapped}/bin/pkg-config $@ 2> /dev/null
+  #err=$?
+  #[ $err -ne 0 ] && exec ${pkg-config}/bin/pkg-config $@
+  #exit $err
+#'';
+
+premake5 = pkgs.callPackage ./premake5-nixpkg/premake5.nix {};
 
 in
 mkShell { # for GCC
@@ -20,12 +22,13 @@ mkShell { # for GCC
 	buildInputs = [
         # build tools
         
-		pkg_config_wrap # first: use wrapper
 		pkg-config # second: set env vars
         cmake # for building conan deps
-        meson
+        premake5
         ninja
-		bear
+		gcovr
+        clang
+        tinycc
         
         # debug
 
@@ -79,12 +82,17 @@ mkShell { # for GCC
         xcb-util-cursor
         libossp_uuid
 
+        wayland-scanner # For GLFW to generate wayland support.
+        wayland         # Hopefully we only get the dev output.
+        xorgproto       # For GLFW wayland support.
+
         # RUNTIME REQUIRED
-        yad
+        yad # Required by tinyfd.
 	];
 	shellHook = ''
 		# git prompt
 		source ${git}/share/git/contrib/completion/git-prompt.sh
 		PS1='\[\033[0;32m\]nix:\w\[\033[0m\] $(__git_ps1 %s)\n$ '
 	'';
+    hardeningDisable = [ "all" ]; # (10 yo regression btw) https://github.com/NixOS/nixpkgs/issues/18995
 }

@@ -7,11 +7,12 @@
 !/README.md
 !/fetch-deps.py
 
-!/mickstr/
-!/mickstr/meson.build
-!/mickstr/mickstr_implementation.c
+!/cwalk/
+!/cwalk/premake5.lua
 
-!/raylib-fix-GetWindowHandler.patch
+!/raylib/
+!/raylib/premake5.lua
+!/raylib/raylib-fix-GetWindowHandler.patch
 
 !/tinyfd/
-!/tinyfd/meson.build
+!/tinyfd/premake5.lua

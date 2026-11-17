@@ -95,7 +95,7 @@ void widget_vsplit(Rect2i area, int child_count, Rect2i *children, void *user_ct
         .height = *vars.gap,
     };
 
-    if (child_count > 2) { printfd("WAR: Too many children."); }
+    if (child_count > 2) { logline("WAR: Too many children."); }
 }
 
 void ui_widget_vsplit_drag(Ctx *ctx, uitree_DrawInfo info) {
@@ -202,7 +202,7 @@ void widget_3hsplit(Rect2i area, int child_count, Rect2i *children, void *user_c
         .x      = children[1].x + children[1].width,
         .width = pad * 2,
     };
-    if (child_count > 3) { printfd("WAR: Too many children."); }
+    if (child_count > 3) { logline("WAR: Too many children."); }
 }
 
 void ui_widget_3hsplit_drag(Ctx *ctx, uitree_DrawInfo info) {

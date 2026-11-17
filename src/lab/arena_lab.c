@@ -21,22 +21,22 @@ void test1_simple(Arena scratch, int entity_amount)
 
     for (int i = 0; i < entity_amount; ++i) {
         Ball *ball = arena_new(&scratch, Ball, 1);
-        printfd("ball #%d from %ld to %ld", i, (ptrdiff_t)ball - og_beg, (ptrdiff_t)ball - og_beg + (ptrdiff_t)sizeof(Ball));
+        logline("ball #%d from %ld to %ld", i, (ptrdiff_t)ball - og_beg, (ptrdiff_t)ball - og_beg + (ptrdiff_t)sizeof(Ball));
 
         Entity *e = arena_new(&scratch, Entity, 1);
-        printfd("entity #%d from %ld to %ld", i, (ptrdiff_t)e - og_beg, (ptrdiff_t)e - og_beg + (ptrdiff_t)sizeof(Entity));
+        logline("entity #%d from %ld to %ld", i, (ptrdiff_t)e - og_beg, (ptrdiff_t)e - og_beg + (ptrdiff_t)sizeof(Entity));
         strcpy(e->name, "Mimo");
 
     }
 
     // Check how much space was left.
-    printfd("Arena beg: %ld, space left: %ld,", (ptrdiff_t)scratch.beg - og_beg, scratch.end - scratch.beg);
+    logline("Arena beg: %ld, space left: %ld,", (ptrdiff_t)scratch.beg - og_beg, scratch.end - scratch.beg);
 }
 
 strbuf_t *arena_create_fixed_strbuf(Arena *perm, int capacity) {
     // @Note: See create_buf in strbuf.c
     int actual_size = (int)sizeof(strbuf_t) + capacity + 1;
-    printfd("-> %d", actual_size);
+    logline("-> %d", actual_size);
     char *buff = arena_new_align(perm, char, void*, (ptrdiff_t)actual_size);
     wassert(buff != NULL);
     return strbuf_create_fixed(buff, (size_t)actual_size);
@@ -76,7 +76,7 @@ void test2_strings(Arena scratch) {
     }
 
 
-    printfd("Arena beg: %ld, space left: %ld,", (ptrdiff_t)scratch.beg - og_beg, scratch.end - scratch.beg);
+    logline("Arena beg: %ld, space left: %ld,", (ptrdiff_t)scratch.beg - og_beg, scratch.end - scratch.beg);
 }
 
 int main(void) {

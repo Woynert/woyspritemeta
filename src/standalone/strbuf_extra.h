@@ -3,31 +3,39 @@
 
 #include <assert.h>
 #include "strbuf.h"
+#include "arena_extra.h"
 
-#define PRIstrargbuf(buf) (buf ? buf->size : 0),(buf ? buf->cstr : "")
-#define strview(buf) strbuf_view2(buf)
+#define PRIstrargbuf(buf) PRIstrarg(strview(buf))
 
 static inline int _strbuf_int_min(int a, int b) { return a < b ? a : b; }
-static strview_t strbuf_view2(strbuf_t* buf) // TODO: Delete this or justify it.
-{
-    strview_t str = STRVIEW_INVALID;
-    if(buf)
-    {
-        str.data = buf->cstr;
-        str.size = buf->size;
-    };
-    return str;
+
+strview_t strview__1(strbuf_t* buf) {
+    if (!buf) { return STRVIEW_INVALID; }
+    return (strview_t) { .data=buf->cstr, .size=buf->size, };
 }
+strview_t strview__2(strbuf_t buf) {
+    return (strview_t) { .data=buf.cstr, .size=buf.size, };
+}
+
+#define strview(buf) _Generic((buf),\
+    strbuf_t*: strview__1, \
+    strbuf_t:  strview__2 \
+    )(buf)
 
 #define STRBUF_STATIC_INIT2(cap, strbuf) do { \
     (strbuf).buf.capacity=(cap); (strbuf).buf.size=0; (strbuf).buf.allocator.allocator=NULL; (strbuf).buf.allocator.app_data=NULL; (strbuf).bdy[0]=0; \
 } while(0)
 
-void strbuf_update_cstr_size(strbuf_t** buf_ptr, int new_size) {
-    strbuf_t* buf = *buf_ptr;
-    assert(new_size >= 0 && new_size <= buf->capacity);
+const char* strview_get_cstr(strview_t view, Arena *perm) {
+    strbuf_t *buf = strbuf_create_with_arena_init(view, perm);
+    return buf->cstr;
+}
+
+/// @Note: new_size should NOT include NULL terminator.
+void strbuf_update_cstr_size(strbuf_t* buf, int new_size) {
+    assert(new_size >= 0 && new_size < buf->capacity);
     buf->size = new_size;
-    buf->cstr[new_size+1] = 0;
+    buf->cstr[new_size] = 0;
 }
 
 void strbuf_recalculate_size_as_cstr(strbuf_t** buf_ptr) {
@@ -41,13 +49,11 @@ void strbuf_recalculate_size_as_cstr(strbuf_t** buf_ptr) {
  * @param buf_ptr The address of a pointer to the buffer.
  * @param index The position within the buffer to pop at.
  * @param count Amount of characters to pop.
- * @return A view of the buffer contents.
  **********************************************************************************/
-strview_t strbuf_pop_at_index(strbuf_t** buf_ptr, int index, int count) {
-    if(buf_ptr && *buf_ptr) {
-        strbuf_t* buf = *buf_ptr;
-        if (index < buf->size) {
-            count = _strbuf_int_min(buf->size - index, count);
+void strbuf_pop_at_index(strbuf_t* buf, int index, int count) {
+    if (index < buf->size) {
+        count = _strbuf_int_min(buf->size - index, count);
+        if (count > 0) {
             memmove(
                 &buf->cstr[index],
                 &buf->cstr[index + count],
@@ -55,7 +61,6 @@ strview_t strbuf_pop_at_index(strbuf_t** buf_ptr, int index, int count) {
             buf->size -= count;
         }
     }
-    return buf_ptr ? strbuf_view2(*buf_ptr) : STRVIEW_INVALID;
 }
 
 // Defaults to '�'.
@@ -144,21 +149,6 @@ int utf8_codepoint_count_strview(const strview_t view) {
     return utf8_codepoint_count(view.data, view.size);
 }
 
-static void strbuf_empty(strbuf_t** buf_ptr)
-{
-    strbuf_t* buf = NULL;
-    if (buf_ptr && *buf_ptr) {
-        buf = *buf_ptr;
-        buf->size = 0;
-        buf->cstr[0] = 0;
-    }
-}
-
-
-bool strview_equal(strview_t str1, strview_t str2)
-{
-    return strview_compare(str1, str2) == 0;
-}
 
 bool char_is_digit(char c) {
     return c >= 0x0030 && c <= 0x0039;
@@ -194,6 +184,32 @@ bool strview_ends_with_cstr(strview_t str1, const char *str2) {
 strview_t wstrview_get_next_line(strview_t *str_ptr) {
     return strview_split_first_delim(str_ptr, "\n", false);
 }
+
+bool strview_is_empty(strview_t str) { return str.size <= 0; }
+
+strview_t strview_trim_whitespace(strview_t str) {
+    return strview_trim(str, " \n\t");
+}
+
+strview_t strview_trim_dir_separator(strview_t str) {
+    return strview_trim_end(str, "/");
+}
+
+/* @returns byte cursor. */
+int utf8_visually_nearest(const char *str, int size, int visual_char_count_target) {
+    int count = 0;
+    int codepoint_size = 0;
+    for (int i = 0; i < size;) {
+        if (count >= visual_char_count_target) {
+            return i;
+        }
+        GetCodepointNext_woy(&str[i], &codepoint_size, size-i);
+        i += codepoint_size;
+        ++count;
+    }
+    return size;
+}
+
 
 /*
 void strbuf_pop_at_index_TEST(void) {

@@ -17,24 +17,23 @@ void SpritesheetFrame_free(SpritesheetFrame *frame) {
 
 int SpritesheetFrame_make(strview_t project_relative_path, strview_t path_abs, SpritesheetFrame *out_frame, Arena scratch) {
     SpritesheetFrame frame = { 0 };
-    frame.path = strbuf_create(path_abs, NULL);
-    frame.relative_path = strbuf_create(0, NULL);
+    strbuf_assign(&frame.path, path_abs);
     wcwk_path_get_relative(project_relative_path, path_abs, &frame.relative_path, &scratch);
 
-    frame.image = LoadImage(frame.path->cstr);
+    frame.image = LoadImage(frame.path.cstr);
     if (!IsImageValid(frame.image)) {
-        printfd("WAR: Couldn't load image [%"PRIstr"].", PRIstrarg(path_abs));
+        logline("WAR: Couldn't load image ["PRIstr"].", PRIstrarg(path_abs));
         goto abort;
     }
 
     if (frame.image.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
-        printfd("WAR: Image isn't R8G8B8A8, converting...");
+        logline("WAR: Image isn't R8G8B8A8, converting...");
         ImageFormat(&frame.image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
     }
 
     frame.texture = LoadTextureFromImage(frame.image);
     if (!IsTextureValid(frame.texture)) {
-        printfd("WAR: Couldn't load texture [%"PRIstr"].", PRIstrarg(path_abs));
+        logline("WAR: Couldn't load texture ["PRIstr"].", PRIstrarg(path_abs));
         goto abort;
     };
 
@@ -82,7 +81,6 @@ void Spritesheet_free(Spritesheet *sheet) {
 
 Sprite sprite_make(void) {
     return (Sprite) {
-        .name = strbuf_create_empty(0, NULL),
         .frames = 1,
     };
 }
@@ -99,14 +97,9 @@ void sprite_free(Sprite *sprite) {
     //Vec_Sprite_clear_preserving(sprites);
 //}
 
-void Project_init(Project *p) {
-    p->path_file = strbuf_create(0, NULL);
-    p->spritesheet_list = Vec_Spritesheet_create();
-}
-
 Project *Project_make(void) {
     Project *p = (Project*)malloc(sizeof(Project));
-    Project_init(p);
+    *p = (Project) { 0 };
     return p;
 }
 

@@ -11,7 +11,7 @@
 typedef struct Ctx Ctx;
 
 typedef struct Action {
-    strbuf_t *name;
+    strbuf_t name;
     int (*op_ptr)(Ctx *ctx); /* @Returns Error. */
 } Action;
 
@@ -21,8 +21,8 @@ typedef struct ActionLiteral {
 } ActionLiteral;
 
 typedef struct SpritesheetFrame {
-    strbuf_t *path;
-    strbuf_t *relative_path; /* Relative from _Project File Dir_ to it. */
+    strbuf_t path;
+    strbuf_t relative_path; /* Relative from _Project File Dir_ to it. */
     Image image;     /* CPU side. */
     Texture texture; /* GPU side. */
 } SpritesheetFrame;
@@ -41,7 +41,7 @@ typedef struct Sprite {
         Rect2i rect;
     };
     int frames;
-    strbuf_t *name;
+    strbuf_t name;
 } Sprite;
 
 #define DYNA__TYPE Action
@@ -86,7 +86,7 @@ typedef enum SHEETEDITOR_CURSOR {
 
 
 typedef struct Project {
-    strbuf_t *path_file; // Absolute.
+    strbuf_t path_file; // Absolute.
     strview_t path_dir;  // Absolute.
     Vec_Spritesheet spritesheet_list;
 } Project;

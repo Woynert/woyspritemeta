@@ -51,7 +51,7 @@ void process_quit_key_combo(void) {
 
 int main(void) {
     printf("Hello there!\n");
-    printfd("HI!");
+    logline("HI!");
 
     Ctx ctx = { 0 };
     ctx_init(&ctx);

@@ -99,20 +99,6 @@ int GetGlyphIndex_woy(Font font, int codepoint) {
     return index;
 }
 
-/* @returns byte cursor. */
-int utf8_visually_nearest(const char *str, int size, int visual_char_count_target) {
-    int count = 0;
-    int codepoint_size = 0;
-    for (int i = 0; i < size;) {
-        if (count >= visual_char_count_target) {
-            return i;
-        }
-        GetCodepointNext_woy(&str[i], &codepoint_size, size-i);
-        i += codepoint_size;
-        ++count;
-    }
-    return size;
-}
 
 /*
  * Extracted from rtext.c
@@ -435,14 +421,6 @@ void DrawCheckerboard(Rect2i rect, Color color, int square_length) {
     }
 }
 
-// Finds a multiple of a number which makes it less or equal to a cap.
-// @returns multiple.
-// @retval 0. Not found.
-int find_multiple_max_fit(int n, int cap) {
-    if (n <= 0) return 0;
-    if (cap <= 0) return 0;
-    return (int)floorf((float)cap / (float)n);
-}
 
 
 /* @Note: Use Rect2i_split_horizontally macro instead. */
@@ -490,12 +468,12 @@ bool IsPathDirectory(const char *path) {
 bool IsPathDirectory_arena(strview_t path, Arena scratch) {
     if (!strview_is_valid(path)) { return false; }
     if (path.data[path.size] == '/') { --path.size; }
-    strbuf_t *path_buf = strbuf_create_with_arena(path, &scratch);
+    strbuf_t *path_buf = strbuf_create_with_arena_init(path, &scratch);
     return IsPathDirectory(path_buf->cstr);
 }
 
 bool IsPathFile_arena(strview_t path, Arena scratch) {
-    strbuf_t *path_buf = strbuf_create_with_arena(path, &scratch);
+    strbuf_t *path_buf = strbuf_create_with_arena_init(path, &scratch);
     return IsPathFile(path_buf->cstr);
 }
 

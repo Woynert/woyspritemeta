@@ -207,13 +207,14 @@ void ui_setup_floating_menu(Ctx *ctx, const ActionLiteral *actions, int action_c
     }
     Vec_Action_clear_preserving(&ctx->menu.actions);
     for (int i = 0; i < action_count; ++i) {
-        strbuf_t *name = strbuf_create(actions[i].name, NULL);
-        Vec_Action_append(&ctx->menu.actions, (Action) { .name=name, .op_ptr=actions[i].op_ptr });
+        Action new_action = { .op_ptr=actions[i].op_ptr, };
+        strbuf_assign(&new_action.name, actions[i].name);
+        Vec_Action_append(&ctx->menu.actions, new_action);
     }
     ctx->menu.rect.width = 0;
     int line_count = 0;
     for (dyna_foreach(Action, iter, ctx->menu.actions)) {
-        V2i measure = ui_measure_text(ctx, strbuf_view2(iter.ref->name));
+        V2i measure = ui_measure_text(ctx, strview(iter.ref->name));
         ctx->menu.rect.width = int_max(ctx->menu.rect.width, measure.x);
         ++line_count;
     }
@@ -256,7 +257,7 @@ void ui_widget_floating_menu(Ctx *ctx, uitree_DrawInfo info) {
             }
         }
 
-        b_ui_draw_text(ctx, strbuf_view2(iter.ref->name), (V2i){{ line_area.pos.x+PAD, line_area.pos.y }}, DEFAULT_FG);
+        b_ui_draw_text(ctx, strview(iter.ref->name), (V2i){{ line_area.pos.x+PAD, line_area.pos.y }}, DEFAULT_FG);
     }
     if (mice_pressed(MouseLeft)) {
         mice_consume(MouseLeft);
@@ -378,12 +379,12 @@ void ui_widget_spritesheet_list(Ctx *ctx, uitree_DrawInfo info) {
             }
         }
 
-        b_ui_draw_text(ctx, strbuf_view2(frame->path), text_offset, DEFAULT_FG);
+        b_ui_draw_text(ctx, strview(frame->path), text_offset, DEFAULT_FG);
         if (is_first && sheet->frames.size > 1) {
             Arena arena = ctx->frame_arena;
-            strbuf_t *frame_count_str = strbuf_create_with_arena(0, &arena);
+            strbuf_t frame_count_str = strbuf_create_with_arena(&arena);
             strbuf_printf(&frame_count_str, "(%d frames)", sheet->frames.size);
-            b_ui_draw_text(ctx, strbuf_view2(frame_count_str), v2i(text_offset.x, text_offset.y + ctx->draw.line_height), DEFAULT_FG);
+            b_ui_draw_text(ctx, strview(frame_count_str), v2i(text_offset.x, text_offset.y + ctx->draw.line_height), DEFAULT_FG);
         }
 
         b_DrawRectangle(Rect2i_add_padding_all(thumbnail_area, -1), BLACK);
@@ -404,7 +405,7 @@ void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
     Rect2i area_scroll_viewport = info.area;
     int *scroll_px = &info.state->int_a;
     float *scroll_vel_px = &info.state->float_a;
-    strbuf_t *aux_str = strbuf_create_with_arena(0, &ctx->frame_arena);
+    strbuf_t aux_str = strbuf_create_with_arena(&ctx->frame_arena);
 
     const int item_height = ctx->draw.line_height * 2;
     const int text_pad = 3;
@@ -473,12 +474,12 @@ void ui_widget_sprite_list(Ctx *ctx, uitree_DrawInfo info) {
         if (sprite->frames > 1) {
             strbuf_append_printf(&aux_str, "(%d frames) ", sprite->frames);
         }
-        strbuf_append_printf(&aux_str,"%dx%d offset %d,%d\n%"PRIstr,
+        strbuf_append_printf(&aux_str,"%dx%d offset %d,%d\n"PRIstr,
             sprite->size.x, sprite->size.y, sprite->offset.x, sprite->offset.y,
             PRIstrargbuf(sprite->name)
         );
 
-        b_ui_draw_text(ctx, strbuf_view2(aux_str), text_offset, DEFAULT_FG);
+        b_ui_draw_text(ctx, strview(aux_str), text_offset, DEFAULT_FG);
 
         // Draw texture.
 
@@ -530,22 +531,23 @@ void ui_widget_sprite_preview(Ctx *ctx, uitree_DrawInfo info) {
         {
             b_DrawRectangleLines(label_box, BLACK, 1);
             strview_t view;
-            if (sprite->name->size == 0) {
+            if (sprite->name.size == 0) {
                 view = cstr_SL("<unnamed>");
             } else {
-                view = cstr(TextFormat("\"%"PRIstr"\"", PRIstrargbuf(sprite->name)));
+                view = cstr(TextFormat("\""PRIstr"\"", PRIstrargbuf(sprite->name)));
             }
             b_ui_draw_text_pad(ctx, view, label_box.pos, DEFAULT_FG);
         }
 
         // Edit name button.
         if (ui_simple_button(btn_edit_box)) {
-            const char *default_input = sprite->name->size > 0 ? sprite->name->cstr : "name";
+            const char *default_input = sprite->name.size > 0 ? sprite->name.cstr : "name";
             const char *new_name_cstr = tinyfd_inputBox("Rename", "Insert new name for Sprite", default_input);
             if (new_name_cstr != NULL) {
                 strview_t new_name = cstr(new_name_cstr);
                 if (sprite_name_already_exists(ctx, new_name)) {
                     tinyfd_messageBox("Error", "Name already exists", "ok", "error", 1);
+                    // TODO: Replace with own messageBox.
                 } else {
                     strbuf_assign(&sprite->name, new_name);
                 }
@@ -656,7 +658,7 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
 
     Rect2i area = info.area;
     bool mouse_focus = mice_in_rect(area);
-    strbuf_t *aux_str = strbuf_create_with_arena(0, &ctx->frame_arena);
+    strbuf_t aux_str = strbuf_create_with_arena(&ctx->frame_arena);
     V2i mouse = GetMousePositioni();
 
     Spritesheet *sheet = get_current_spritesheet(ctx);
@@ -736,9 +738,9 @@ void ui_widget_spritesheet_viewport(Ctx *ctx, uitree_DrawInfo info) {
                 selection,
                 panned_origin, (int)scale, GREEN, 1);
             
-            strview_t text = strbuf_printf(&aux_str, "%d x %d", selection.size.x, selection.size.y);
+            strbuf_printf(&aux_str, "%d x %d", selection.size.x, selection.size.y);
             b_ui_draw_text_highlighted(
-                ctx, text,
+                ctx, strview(aux_str),
                 v2f_2i(v2f_translate_scale(v2i_add(selection.pos, v2ii(1)), panned_origin, scale)),
                 WHITE, BLACK);
         }
@@ -895,7 +897,7 @@ void ui_widget_welcome_screen(Ctx *ctx, uitree_DrawInfo info) {
     for (int i = 0; i < countofi(menu); ++i) { labels[i] = menu[i].name; }
 
     int result = ui__draw_option_select(ctx, line_area, labels, countof(labels));
-    if (int_in_range_inclusive(0, countof(menu), result)) {
+    if (in_range_inclusive(0, countof(menu), result)) {
         menu[result].op_ptr(ctx);
     }
     //b_DrawRectangleLines((Rect2i){{line_area.x, line_area.y, line_area.width, line_area.height * countofi(menu)}}, BLACK, 1);
@@ -921,7 +923,7 @@ void ui_widget_status_bar(Ctx *ctx, uitree_DrawInfo info) {
     b_DrawRectangle(area, DEFAULT_FG);
 
     Arena scratch = ctx->frame_arena;
-    strbuf_t *str = strbuf_create_with_arena(0, &scratch);
+    strbuf_t str = strbuf_create_with_arena(&scratch);
 
     strbuf_printf(&str,
         "Current Project: "PRIstrw
@@ -1038,7 +1040,7 @@ void ui_draw_workspace(Ctx *ctx) {
     }
     drawbuf_draw_all();
 
-    //printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (t->arena.end - t->arena.beg)), PRIbytearg(1 << 20));
+    //logline("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (t->arena.end - t->arena.beg)), PRIbytearg(1 << 20));
 }
 
 void ui_draw_welcome_screen(Ctx *ctx) {
@@ -1068,7 +1070,7 @@ void ui_draw_welcome_screen(Ctx *ctx) {
     }
     drawbuf_draw_all();
 
-    //printfd("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (t->arena.end - t->arena.beg)), PRIbytearg(1 << 20));
+    //logline("Arena consumption is "PRIbyte" out of "PRIbyte, PRIbytearg((1 << 20) - (t->arena.end - t->arena.beg)), PRIbytearg(1 << 20));
 }
 
 void ui_draw_all(Ctx *ctx) {

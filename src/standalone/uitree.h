@@ -57,7 +57,7 @@ typedef void (uitree_ContainerFunc)(Rect2i area, int child_count, Rect2i *childr
 
 typedef struct uitree_Node {
 
-    int identifier_strpool_id; // -1 means no identifier, It's OK if a widget has no identifier. It's state won't persist thru frames.
+    ID identifier_strpool_id; // -1 means no identifier, It's OK if a widget has no identifier. It's state won't persist thru frames.
 
     bool has_user_draw_func;  // User must check this, if adding an user_function_id.
     int user_draw_func_id;    // An id for the user to identify which function to call.
@@ -86,7 +86,7 @@ typedef struct uitree_Node {
 typedef struct Uitree {
     ArenaRoot arenaroot;
     Arena arena;
-    strpool strpool; // For temporarily storing Nodes' identifiers.
+    Strpool strpool; // For temporarily storing Nodes' identifiers.
 
     // Maps a title to a state. We might add or delete from this every frame.
     uitree_Map_str_state title_to_state;
@@ -160,7 +160,7 @@ uitree_WidgetState * uitree__try_get_saved_state(Uitree *t, strview_t key, uitre
         state = uitree_Map_str_state_get(&t->title_to_state, key);
         reset_state = true;
     } else if ((t->frame - state->__last_frame) > 1) { // Note: Maybe this should go in the cleanup function.
-        printfd(ANSI_RED"INFO: (%"PRIstr") Resetting this old state. got %d expected %d", PRIstrarg(key), state->__last_frame, t->frame);
+        logline(ANSI_RED"INFO: (%"PRIstr") Resetting this old state. got %d expected %d", PRIstrarg(key), state->__last_frame, t->frame);
         *state = (uitree_WidgetState) {0};
         reset_state = true;
     } else {
@@ -184,7 +184,7 @@ uitree_WidgetState * uitree__try_get_saved_state(Uitree *t, strview_t key, uitre
 }
 
 
-#define DYNA__TYPE int
+#define DYNA__TYPE ID
 #define DYNA__NAMESPACE Vec_oldkeys
 #include "da.h"
 
@@ -192,29 +192,31 @@ void uitree__cleanup_saved_state(Uitree *t) {
     // Collect keys to purge.
 
     Arena arena = t->arena;
-    strpool old_keys;
+    Strpool old_keys;
     Vec_oldkeys old_keys_ids = Vec_oldkeys_create_with_allocator(arena_allocator, &arena);
     strpool_create_with_allocator(&old_keys, arena_allocator, &arena);
 
-    uitree_Map_str_state_It it = { 0 };
-    while (uitree_Map_str_state_it_next(&t->title_to_state, &it)) {
-        if ((t->frame - it.value->__last_frame) > 1) {
-            int str_key_id = strpool_append(&old_keys, it.key);
-            Vec_oldkeys_append(&old_keys_ids, str_key_id);
+    {
+        uitree_Map_str_state_It it = { 0 };
+        while (uitree_Map_str_state_it_next(&t->title_to_state, &it)) {
+            if ((t->frame - it.value->__last_frame) > 1) {
+                ID str_key_id = strpool_append(&old_keys, it.key);
+                Vec_oldkeys_append(&old_keys_ids, str_key_id);
+            }
         }
     }
 
     // Remove all.
-    for (dyna_foreach(int, iter, old_keys_ids)) {
-        strview_t key = strpool_get(&old_keys, iter.index);
+    for (dyna_foreach_gnu(it, old_keys_ids)) {
+        strview_t key = strpool_get(&old_keys, *it.ref);
         uitree_Map_str_state_remove(&t->title_to_state, key);
-        printfd(ANSI_RED"DEBUG: Cleaning up this state %"PRIstr, PRIstrarg(key));
+        logline(ANSI_RED"DEBUG: Cleaning up this state %"PRIstr, PRIstrarg(key));
     }
 }
 
 
 void uitree__container_calculate_children_area(Uitree *t, Arena *scratch, uitree_Node *node) {
-    if (node->container_func == NULL) { printfd(ANSI_RED"ERROR: Container has no 'container_function'."); return; }
+    if (node->container_func == NULL) { logline(ANSI_RED"ERROR: Container has no 'container_function'."); return; }
     Rect2i *children_areas = arena_new(scratch, Rect2i, node->container.children.size);
     strview_t identifier = strpool_get(&t->strpool, node->identifier_strpool_id);
     uitree_WidgetState *state = uitree__try_get_saved_state(t, identifier, node);
@@ -238,14 +240,14 @@ typedef struct {
 
 void uitree__DELME_print_dyna(uitree__List_Stack *list, int depth) {
     for (int i = 0; i < depth; ++i) { printf("    "); }
-    printfd(ANSI_BLU"↓↓↓");
+    logline(ANSI_BLU"↓↓↓");
     int k = -1;
     uitree__List_Stack_It it = { 0 };
     while (uitree__List_Stack_it_next(list, &it)) {
         ++k;
         StackItem *item = it.item;
         for (int i = 0; i < depth; ++i) { printf("    "); }
-        printfd(ANSI_BLU"%d %p: %p %d %d", k, (void*)item, (void*)item->node, item->child_idx, item->depth);
+        logline(ANSI_BLU"%d %p: %p %d %d", k, (void*)item, (void*)item->node, item->child_idx, item->depth);
     }
 }
 
@@ -255,7 +257,7 @@ void uitree_build_end(Uitree *t) {
     uitree__cleanup_saved_state(t);
 
     if ((0)) {
-        printfd("PRINTING TREE:");
+        logline("PRINTING TREE:");
         uitree__print_tree(t, &t->root_node, 0);
     }
 
@@ -339,7 +341,7 @@ uitree_Node uitree_container_dumb(uitree_ContainerFunc *cont_func) {
 }
 
 uitree_Node uitree_container_dumb_id(Uitree *t, strview_t id, uitree_ContainerFunc *cont_func) {
-    int str_id = -1;
+    ID str_id = ID_INVALID;
     if (id.size > 0 && id.data != NULL) {
         str_id = strpool_append(&t->strpool, id);
     }
@@ -351,7 +353,7 @@ uitree_Node uitree_container_dumb_id(Uitree *t, strview_t id, uitree_ContainerFu
 }
 
 uitree_Node uitree_container(Uitree *t, strview_t id, uitree_ContainerFunc *cont_func, int user_draw_func_id) {
-    int str_id = -1;
+    ID str_id = ID_INVALID;
     if (id.size > 0 && id.data != NULL) {
         str_id = strpool_append(&t->strpool, id);
     }
@@ -373,7 +375,7 @@ uitree_Node uitree_widget(int user_draw_func_id) {
 }
 
 uitree_Node uitree_widget_id(Uitree *t, int user_draw_func_id, strview_t id) {
-    int str_id = -1;
+    ID str_id = ID_INVALID;
     if (id.size > 0 && id.data != NULL) {
         str_id = strpool_append(&t->strpool, id);
     }
@@ -387,7 +389,7 @@ uitree_Node uitree_widget_id(Uitree *t, int user_draw_func_id, strview_t id) {
 
 void uitree_container_add_child(Uitree *t, uitree_Node *parent_node, uitree_Node child_node) {
     if (!parent_node->is_container) {
-        printfd("WAR: Refusing to add child to non-container node.");
+        logline("WAR: Refusing to add child to non-container node.");
         return;
     }
 

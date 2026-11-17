@@ -20,7 +20,7 @@ struct {
     } key[GLFW_KEY_LAST+1];
 } KINPUT = { 0 };
 
-static inline bool kinput__key_valid(int key) { return int_in_range_inclusive(0, GLFW_KEY_LAST, key); }
+static inline bool kinput__key_valid(int key) { return in_range_inclusive(0, GLFW_KEY_LAST, key); }
 
 void kinput_glfw_key_callback(GLFWwindow* w, int key, int scancode, int action, int mods) {
     (void)mods; (void)scancode; (void)w;

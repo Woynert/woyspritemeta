@@ -6,5 +6,5 @@ scripts/*.html
 scripts/*.out
 *.png~
 *.blend1
-
+compile_commands.json
 subprojects/packagecache

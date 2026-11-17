@@ -1,2 +1,3 @@
 # Known glfw leak
 leak:extensionSupportedGLX
+leak:_glfwInitGLX
